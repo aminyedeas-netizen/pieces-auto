@@ -1,0 +1,474 @@
+{
+  "constructor": "Hyundai",
+  "wmi_codes": [
+    "KMH"
+  ],
+  "model_positions": [
+    3,
+    4
+  ],
+  "engine_positions": [
+    7
+  ],
+  "vin_models": {
+    "BA": "i10 I",
+    "BB": "i10 II",
+    "BI": "i10 III",
+    "DA": "i20 I",
+    "DB": "i20 II",
+    "DI": "i20 III",
+    "FD": "i30 FD",
+    "GD": "i30 GD",
+    "PD": "i30 PD",
+    "CA": "Accent II",
+    "CB": "Accent / Verna III",
+    "CD": "Accent IV",
+    "CI": "Accent V",
+    "AA": "Elantra HD",
+    "AB": "Elantra MD",
+    "AD": "Elantra AD",
+    "LM": "Tucson I (JM)",
+    "TL": "ix35 / Tucson II",
+    "N4": "Tucson III",
+    "NX": "Tucson IV",
+    "CM": "Santa Fe II (CM)",
+    "DM": "Santa Fe III",
+    "TM": "Santa Fe IV",
+    "KN": "Kona",
+    "KE": "Kona II",
+    "EA": "Getz",
+    "FA": "Matrix",
+    "NF": "Sonata NF",
+    "LF": "Sonata LF",
+    "DN": "Sonata DN8",
+    "HA": "H-1 / Starex",
+    "GS": "Grand i10",
+    "SU": "Creta",
+    "BN": "Bayon",
+    "QX": "Venue"
+  },
+  "models": {
+    "i10 I": {
+      "years": [
+        2008,
+        2013
+      ],
+      "engines": [
+        "A",
+        "B"
+      ]
+    },
+    "i10 II": {
+      "years": [
+        2013,
+        2019
+      ],
+      "engines": [
+        "A",
+        "B"
+      ]
+    },
+    "i10 III": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B"
+      ]
+    },
+    "i20 I": {
+      "years": [
+        2008,
+        2014
+      ],
+      "engines": [
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    },
+    "i20 II": {
+      "years": [
+        2014,
+        2020
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    },
+    "i20 III": {
+      "years": [
+        2020,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    "i30 FD": {
+      "years": [
+        2007,
+        2011
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "i30 GD": {
+      "years": [
+        2012,
+        2017
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "i30 PD": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Accent II": {
+      "years": [
+        1999,
+        2005
+      ],
+      "engines": [
+        "B",
+        "C"
+      ]
+    },
+    "Accent / Verna III": {
+      "years": [
+        2005,
+        2010
+      ],
+      "engines": [
+        "B",
+        "C",
+        "F"
+      ]
+    },
+    "Accent IV": {
+      "years": [
+        2010,
+        2017
+      ],
+      "engines": [
+        "B",
+        "C",
+        "F"
+      ]
+    },
+    "Accent V": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "B",
+        "C"
+      ]
+    },
+    "Elantra HD": {
+      "years": [
+        2006,
+        2010
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F"
+      ]
+    },
+    "Elantra MD": {
+      "years": [
+        2010,
+        2015
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F"
+      ]
+    },
+    "Elantra AD": {
+      "years": [
+        2016,
+        2020
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F"
+      ]
+    },
+    "Tucson I (JM)": {
+      "years": [
+        2004,
+        2009
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "ix35 / Tucson II": {
+      "years": [
+        2010,
+        2015
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Tucson III": {
+      "years": [
+        2015,
+        2020
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Tucson IV": {
+      "years": [
+        2020,
+        2025
+      ],
+      "engines": [
+        "C",
+        "D",
+        "G",
+        "H"
+      ]
+    },
+    "Santa Fe II (CM)": {
+      "years": [
+        2006,
+        2012
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Santa Fe III": {
+      "years": [
+        2012,
+        2018
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Santa Fe IV": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "D",
+        "G",
+        "H"
+      ]
+    },
+    "Kona": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "F"
+      ]
+    },
+    "Kona II": {
+      "years": [
+        2023,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "H"
+      ]
+    },
+    "Getz": {
+      "years": [
+        2002,
+        2011
+      ],
+      "engines": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    "Matrix": {
+      "years": [
+        2001,
+        2010
+      ],
+      "engines": [
+        "C",
+        "F"
+      ]
+    },
+    "Grand i10": {
+      "years": [
+        2013,
+        2019
+      ],
+      "engines": [
+        "A",
+        "B"
+      ]
+    },
+    "Sonata NF": {
+      "years": [
+        2005,
+        2010
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Sonata LF": {
+      "years": [
+        2014,
+        2019
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Sonata DN8": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "D",
+        "H"
+      ]
+    },
+    "H-1 / Starex": {
+      "years": [
+        2007,
+        2025
+      ],
+      "engines": [
+        "G"
+      ]
+    },
+    "Creta": {
+      "years": [
+        2015,
+        2025
+      ],
+      "engines": [
+        "B",
+        "C",
+        "F"
+      ]
+    },
+    "Bayon": {
+      "years": [
+        2021,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B"
+      ]
+    },
+    "Venue": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B"
+      ]
+    }
+  },
+  "engines": {
+    "A": {
+      "desc": "1.0 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "B": {
+      "desc": "1.2 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "C": {
+      "desc": "1.6 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "D": {
+      "desc": "2.0 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "E": {
+      "desc": "1.1 Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "F": {
+      "desc": "1.6 CRDi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "G": {
+      "desc": "2.0 CRDi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "H": {
+      "desc": "1.6 T-GDI / Hybride Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    }
+  }
+}

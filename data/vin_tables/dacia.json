@@ -1,0 +1,227 @@
+{
+  "constructor": "Dacia",
+  "wmi_codes": [
+    "UU1",
+    "VGA"
+  ],
+  "model_positions": [
+    3,
+    4
+  ],
+  "engine_positions": [
+    6
+  ],
+  "vin_models": {
+    "SD": "Sandero I",
+    "B5": "Sandero II",
+    "BJ": "Sandero III",
+    "LS": "Logan I",
+    "L5": "Logan II",
+    "LJ": "Logan III",
+    "HS": "Duster I",
+    "HM": "Duster II",
+    "HN": "Duster III",
+    "YS": "Lodgy",
+    "FK": "Dokker",
+    "6A": "Spring",
+    "RJ": "Jogger",
+    "KS": "Logan MCV"
+  },
+  "models": {
+    "Sandero I": {
+      "years": [
+        2008,
+        2012
+      ],
+      "engines": [
+        "P",
+        "C",
+        "D"
+      ]
+    },
+    "Sandero II": {
+      "years": [
+        2012,
+        2020
+      ],
+      "engines": [
+        "H",
+        "N",
+        "F",
+        "D"
+      ]
+    },
+    "Sandero III": {
+      "years": [
+        2020,
+        2025
+      ],
+      "engines": [
+        "H",
+        "N",
+        "G",
+        "D"
+      ]
+    },
+    "Logan I": {
+      "years": [
+        2004,
+        2012
+      ],
+      "engines": [
+        "P",
+        "C",
+        "D"
+      ]
+    },
+    "Logan II": {
+      "years": [
+        2012,
+        2020
+      ],
+      "engines": [
+        "H",
+        "N",
+        "F",
+        "D"
+      ]
+    },
+    "Logan III": {
+      "years": [
+        2020,
+        2025
+      ],
+      "engines": [
+        "H",
+        "N",
+        "G",
+        "D"
+      ]
+    },
+    "Duster I": {
+      "years": [
+        2010,
+        2017
+      ],
+      "engines": [
+        "C",
+        "F",
+        "D"
+      ]
+    },
+    "Duster II": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "F",
+        "G",
+        "D"
+      ]
+    },
+    "Duster III": {
+      "years": [
+        2024,
+        2025
+      ],
+      "engines": [
+        "G",
+        "D"
+      ]
+    },
+    "Lodgy": {
+      "years": [
+        2012,
+        2022
+      ],
+      "engines": [
+        "F",
+        "D"
+      ]
+    },
+    "Dokker": {
+      "years": [
+        2012,
+        2021
+      ],
+      "engines": [
+        "F",
+        "D"
+      ]
+    },
+    "Spring": {
+      "years": [
+        2021,
+        2025
+      ],
+      "engines": [
+        "E"
+      ]
+    },
+    "Jogger": {
+      "years": [
+        2022,
+        2025
+      ],
+      "engines": [
+        "H",
+        "G"
+      ]
+    },
+    "Logan MCV": {
+      "years": [
+        2006,
+        2020
+      ],
+      "engines": [
+        "P",
+        "C",
+        "F",
+        "D"
+      ]
+    }
+  },
+  "engines": {
+    "H": {
+      "desc": "1.0 SCe Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "N": {
+      "desc": "1.0 TCe Turbo Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "P": {
+      "desc": "1.2 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "C": {
+      "desc": "1.6 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "F": {
+      "desc": "1.2 TCe Turbo Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "G": {
+      "desc": "1.3 TCe Turbo Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "D": {
+      "desc": "1.5 dCi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "E": {
+      "desc": "Electrique",
+      "fuel": "Electrique",
+      "confidence": "medium"
+    }
+  }
+}

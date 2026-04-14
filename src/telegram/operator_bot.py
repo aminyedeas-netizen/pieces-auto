@@ -1,0 +1,1735 @@
+"""Operator-facing Telegram bot. Manages /ref (screenshot ingestion) and /vin flows."""
+
+import json
+import logging
+import os
+import re
+import uuid
+
+from dotenv import load_dotenv
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+)
+
+load_dotenv()
+
+log = logging.getLogger(__name__)
+
+BOT_TOKEN = os.environ.get("TELEGRAM_OPERATOR_BOT_TOKEN", "")
+
+# --- Session state per chat ---
+# /ref flow: collecting screenshots
+# {chat_id: {vehicle: str, part: str, screenshots: [bytes], state: "collecting"|"confirming", extraction: dict}}
+ref_sessions: dict[int, dict] = {}
+
+# /vin flow: selecting vehicle for VIN pattern
+# {chat_id: {vin: str, brand: str, year: int, explanation: [str], state: str}}
+vin_sessions: dict[int, dict] = {}
+
+# Pending confirmations for callback buttons
+# {callback_id: {type: "ref"|"vin", data: dict}}
+pending_confirms: dict[str, dict] = {}
+
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "\u2699\uFE0F Bot operateur actif.\n"
+        "Tapez /guide pour voir les commandes disponibles."
+    )
+
+
+async def cmd_guide(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/guide — Show available commands and what they do."""
+    await update.message.reply_text(
+        "\U0001F4CB *Commandes disponibles*\n"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
+        "\U0001F4F7 /ajouter\\_ref \\-\\- Ajouter des references\n"
+        "  Screenshots PiecesAuto24 \\> extraction auto\\.\n\n"
+        "\U0001F522 /vin \\-\\- Associer un VIN\n"
+        "  Decode le VIN et propose l'association\\.\n\n"
+        "\U0001F4E6 /ref \\-\\- Consulter les references\n"
+        "  Marque \\> Modele \\> Annee \\> Moteur \\> Piece\\.\n\n"
+        "\U0001F50D /dispo \\-\\- Disponibilite CDG\n"
+        "  Texte libre ou boutons\\. Prix et stock live\\.\n\n"
+        "\U0001F4CA /stats \\-\\- Statistiques base\n\n"
+        "\u2753 /guide \\-\\- Ce message",
+        parse_mode="MarkdownV2",
+    )
+
+
+async def cmd_ajouter_ref(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/ajouter_ref — Start screenshot collection flow for PiecesAuto24 references."""
+    chat_id = update.effective_chat.id
+    ref_sessions[chat_id] = {
+        "vehicle": None,
+        "part": None,
+        "screenshots": [],
+        "state": "collecting",
+        "extraction": None,
+    }
+    keyboard = [[InlineKeyboardButton("\u274C Annuler", callback_data="ref_stop")]]
+    await update.message.reply_text(
+        "\U0001F4F7 *Ajout de references PiecesAuto24*\n"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
+        "Envoyez les screenshots de la page produit\\.\n\n"
+        "Le premier screenshot doit montrer le haut de la page "
+        "avec le nom complet du vehicule et de la piece\\.\n\n"
+        "\U0001F4E4 Envoyez le premier screenshot maintenant\\.",
+        parse_mode="MarkdownV2",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle incoming photos — part of /ref screenshot collection."""
+    chat_id = update.effective_chat.id
+
+    if chat_id not in ref_sessions:
+        await update.message.reply_text("Utilisez /ajouter_ref pour commencer l'ingestion.")
+        return
+
+    session = ref_sessions[chat_id]
+    if session["state"] != "collecting":
+        await update.message.reply_text("Ingestion en cours. Attendez la fin.")
+        return
+
+    # Download photo
+    photo = update.message.photo[-1]  # highest resolution
+    file = await photo.get_file()
+    photo_bytes = await file.download_as_bytearray()
+    screenshot_num = len(session["screenshots"]) + 1
+    session["screenshots"].append(bytes(photo_bytes))
+
+    # First screenshot: detect vehicle + part name
+    if screenshot_num == 1:
+        vehicle, part = await _detect_vehicle_and_part(photo_bytes)
+        if vehicle and part:
+            session["vehicle"] = vehicle
+            session["part"] = part
+            keyboard = [
+                [
+                    InlineKeyboardButton("Envoyer un autre", callback_data="ref_more"),
+                    InlineKeyboardButton("Lancer l'ingestion", callback_data="ref_ingest"),
+                ],
+                [InlineKeyboardButton("Annuler", callback_data="ref_stop")],
+            ]
+            await update.message.reply_text(
+                f"Vehicule: {vehicle}\n"
+                f"Piece: {part}\n"
+                f"Screenshot {screenshot_num} recu.\n"
+                "Voulez-vous envoyer d'autres screenshots ou lancer l'ingestion?",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+        else:
+            await update.message.reply_text(
+                "Je ne detecte pas le nom du vehicule en haut du screenshot.\n"
+                "Le premier screenshot doit montrer le titre de la page produit "
+                "PiecesAuto24 avec le nom du vehicule. Reessayez."
+            )
+            session["screenshots"].pop()  # Remove failed screenshot
+    else:
+        keyboard = [
+            [
+                InlineKeyboardButton("Envoyer un autre", callback_data="ref_more"),
+                InlineKeyboardButton("Lancer l'ingestion", callback_data="ref_ingest"),
+            ],
+            [InlineKeyboardButton("Annuler", callback_data="ref_stop")],
+        ]
+        await update.message.reply_text(
+            f"Screenshot {screenshot_num} recu.\n"
+            "Envoyer un autre ou lancer l'ingestion?",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+
+
+async def handle_ref_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /ref flow button presses."""
+    query = update.callback_query
+    await query.answer()
+    chat_id = query.message.chat_id
+    data = query.data
+
+    if data == "ref_stop":
+        ref_sessions.pop(chat_id, None)
+        await query.edit_message_text("Ingestion annulee.")
+        return
+
+    if data == "ref_more":
+        keyboard = [[InlineKeyboardButton("Annuler", callback_data="ref_stop")]]
+        await query.edit_message_text(
+            query.message.text + "\n\nEnvoyez le screenshot suivant.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data == "ref_ingest":
+        session = ref_sessions.get(chat_id)
+        if not session or not session["screenshots"]:
+            await query.edit_message_text("Pas de screenshots. Utilisez /ref.")
+            return
+
+        session["state"] = "ingesting"
+        await query.edit_message_text("Extraction en cours...")
+
+        # Send all screenshots to LLM for extraction
+        extraction = await _extract_from_screenshots(session["screenshots"])
+        session["extraction"] = extraction
+
+        # Format summary
+        summary = _format_extraction_summary(session["vehicle"], session["part"], extraction)
+
+        confirm_id = str(uuid.uuid4())[:8]
+        pending_confirms[confirm_id] = {
+            "type": "ref",
+            "chat_id": chat_id,
+        }
+
+        keyboard = [
+            [
+                InlineKeyboardButton("Valider et enregistrer", callback_data=f"ref_confirm:{confirm_id}"),
+                InlineKeyboardButton("Annuler", callback_data=f"ref_cancel:{confirm_id}"),
+            ]
+        ]
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=summary,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    # Confirm/cancel ingestion
+    if data.startswith("ref_confirm:") or data.startswith("ref_cancel:"):
+        action, confirm_id = data.split(":", 1)
+
+        if confirm_id not in pending_confirms:
+            await query.edit_message_text("Confirmation expiree.")
+            return
+
+        pending_confirms.pop(confirm_id)
+        session = ref_sessions.get(chat_id)
+
+        if action == "ref_cancel" or not session:
+            ref_sessions.pop(chat_id, None)
+            await query.edit_message_text("Annule.")
+            return
+
+        # Save everything to DB and local storage
+        result = await _save_ref_data(session)
+        ref_sessions.pop(chat_id, None)
+        await query.edit_message_text(result)
+        return
+
+
+async def _detect_vehicle_and_part(photo_bytes: bytearray) -> tuple[str | None, str | None]:
+    """Use LLM vision to detect vehicle name and part from first screenshot."""
+    import base64
+    from src.interpreter.llm import call_llm, _parse_json_response
+
+    image_b64 = base64.b64encode(photo_bytes).decode()
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Extract the vehicle name and part name from this PiecesAuto24 screenshot. "
+                "The vehicle name is in the page header (e.g. 'PEUGEOT 208 II 3/5 portes (UB_...) 1.2 PureTech'). "
+                "The part name is the product category (e.g. 'Filtre a carburant'). "
+                "Return ONLY JSON: {\"vehicle\": \"...\", \"part\": \"...\"}\n"
+                "If you cannot detect both, return {\"vehicle\": null, \"part\": null}"
+            ),
+        },
+        {"role": "user", "content": "Extract vehicle and part from this screenshot."},
+    ]
+    try:
+        raw = await call_llm(messages, image_base64=image_b64)
+        data = _parse_json_response(raw)
+        return data.get("vehicle"), data.get("part")
+    except Exception as e:
+        log.error("Vehicle detection failed: %s", e)
+        return None, None
+
+
+async def _extract_from_screenshots(screenshots: list[bytes]) -> dict:
+    """Send all screenshots to LLM vision for full extraction."""
+    import base64
+    from src.interpreter.llm import call_llm, _parse_json_response
+    from src.interpreter.prompts import SYSTEM_PA24_SCREENSHOT
+
+    # Combine all screenshots into one LLM call with multiple images
+    # For simplicity, process each screenshot and merge results
+    merged = {
+        "vehicle": None,
+        "part_searched": None,
+        "product_scraped": None,
+        "specs": {},
+        "oe_references": [],
+        "equivalents": [],
+        "cross_references": [],
+        "compatible_vehicles": [],
+    }
+
+    for i, photo_bytes in enumerate(screenshots):
+        image_b64 = base64.b64encode(photo_bytes).decode()
+        messages = [
+            {"role": "system", "content": SYSTEM_PA24_SCREENSHOT},
+            {"role": "user", "content": f"Screenshot {i + 1} of {len(screenshots)}. Extract all visible data."},
+        ]
+        try:
+            raw = await call_llm(messages, image_base64=image_b64)
+            data = _parse_json_response(raw)
+            _merge_extraction(merged, data)
+        except Exception as e:
+            log.error("Extraction failed for screenshot %d: %s", i + 1, e)
+
+    return merged
+
+
+def _merge_extraction(target: dict, source: dict) -> None:
+    """Merge extracted data from one screenshot into the accumulated result."""
+    if source.get("vehicle") and not target["vehicle"]:
+        target["vehicle"] = source["vehicle"]
+    if source.get("part_searched") and not target["part_searched"]:
+        target["part_searched"] = source["part_searched"]
+    if source.get("product_scraped") and not target["product_scraped"]:
+        target["product_scraped"] = source["product_scraped"]
+    if source.get("specs"):
+        target["specs"].update(source["specs"])
+
+    # Merge lists, avoiding duplicates by ref
+    for key in ("oe_references", "equivalents", "cross_references"):
+        existing_refs = {_ref_key(r) for r in target[key]}
+        for item in source.get(key, []) or []:
+            if _ref_key(item) not in existing_refs:
+                target[key].append(item)
+                existing_refs.add(_ref_key(item))
+
+    # Merge compatible vehicles
+    existing_brands = {v.get("brand", "") for v in target["compatible_vehicles"]}
+    for item in source.get("compatible_vehicles", []) or []:
+        brand = item.get("brand", "")
+        if brand not in existing_brands:
+            target["compatible_vehicles"].append(item)
+            existing_brands.add(brand)
+
+
+def _ref_key(ref: dict) -> str:
+    """Create a dedup key for a reference entry."""
+    return f"{ref.get('brand', '')}:{ref.get('ref', ref.get('reference', ''))}".lower()
+
+
+def _format_extraction_summary(vehicle: str, part: str, extraction: dict) -> str:
+    """Format extraction results for operator confirmation."""
+    lines = [f"Extraction terminee:"]
+    lines.append(f"Vehicule: {vehicle or extraction.get('vehicle', '?')}")
+    lines.append(f"Piece: {part or extraction.get('part_searched', '?')}")
+
+    product = extraction.get("product_scraped")
+    if product:
+        price = f"{product.get('price_eur')} EUR" if product.get("price_eur") else "N/A"
+        lines.append(f"Produit principal: {product.get('brand', '?')} {product.get('reference', '?')} -- {price}")
+
+    oe_count = len(extraction.get("oe_references", []))
+    eq_count = len(extraction.get("equivalents", []))
+    xr_count = len(extraction.get("cross_references", []))
+    compat_count = len(extraction.get("compatible_vehicles", []))
+    total_refs = oe_count + eq_count + xr_count
+
+    if oe_count:
+        oe_refs = ", ".join(f"{r.get('brand', '?')} {r.get('ref', '?')}" for r in extraction["oe_references"][:5])
+        lines.append(f"References OE: {oe_refs}" + (f" (+{oe_count - 5})" if oe_count > 5 else ""))
+    lines.append(f"Equivalents: {eq_count}")
+    lines.append(f"Cross-references: {xr_count}")
+    if compat_count:
+        lines.append(f"Vehicules compatibles: {compat_count}+ marques")
+    lines.append(f"Total: {total_refs} references")
+
+    return "\n".join(lines)
+
+
+def _sanitize_path(name: str) -> str:
+    """Sanitize a name for filesystem use. Preserves parentheses and dots."""
+    name = name.lower()
+    name = name.replace(" ", "_")
+    name = name.replace("/", "-")
+    name = re.sub(r"[^a-z0-9_\-\.\(\)]", "", name)
+    return name
+
+
+async def _save_ref_data(session: dict) -> str:
+    """Save screenshots to disk and extraction data to DB. Returns summary."""
+    from pathlib import Path
+    from src.db.repository import (
+        upsert_vehicle, insert_reference, insert_compatibility,
+        insert_screenshot,
+    )
+    from src.db.models import Vehicle
+
+    extraction = session["extraction"]
+    vehicle_name = session["vehicle"] or extraction.get("vehicle", "unknown")
+    part_name = session["part"] or extraction.get("part_searched", "unknown")
+
+    # Parse vehicle name into a Vehicle for upsert
+    vehicle = _parse_vehicle_name(vehicle_name)
+    vehicle_id = await upsert_vehicle(vehicle)
+
+    # Save screenshots to local filesystem
+    base_dir = Path("screenshots") / _sanitize_path(vehicle_name) / _sanitize_path(part_name)
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    for i, photo_bytes in enumerate(session["screenshots"]):
+        filename = f"screenshot_{i + 1:03d}.png"
+        filepath = base_dir / filename
+        filepath.write_bytes(photo_bytes)
+        await insert_screenshot(vehicle_id, part_name, str(filepath))
+
+    # Save data.json
+    data_path = base_dir / "data.json"
+    data_path.write_text(json.dumps(extraction, indent=2, ensure_ascii=False))
+
+    # Insert references into DB
+    ref_count = 0
+
+    # OE references
+    for ref_entry in extraction.get("oe_references", []):
+        brand = ref_entry.get("brand", "")
+        ref_code = ref_entry.get("ref", "")
+        if brand and ref_code:
+            await insert_reference(vehicle_id, part_name, brand, ref_code, True, source="oe")
+            ref_count += 1
+
+    # Main product as aftermarket reference
+    product = extraction.get("product_scraped")
+    if product and product.get("brand") and product.get("reference"):
+        await insert_reference(
+            vehicle_id, part_name, product["brand"], product["reference"],
+            False, product.get("price_eur"), source="main_product",
+        )
+        ref_count += 1
+
+    # Equivalents
+    for eq in extraction.get("equivalents", []):
+        brand = eq.get("brand", "")
+        ref_code = eq.get("reference", "")
+        if brand and ref_code:
+            await insert_reference(
+                vehicle_id, part_name, brand, ref_code, False, eq.get("price_eur"),
+                source="equivalent",
+            )
+            ref_count += 1
+
+    # Cross references
+    for xr in extraction.get("cross_references", []):
+        brand = xr.get("brand", "")
+        ref_code = xr.get("reference", "")
+        if brand and ref_code:
+            await insert_reference(
+                vehicle_id, part_name, brand, ref_code, False, xr.get("price_eur"),
+                source="cross_reference",
+            )
+            ref_count += 1
+
+    return (
+        f"{ref_count} references enregistrees pour\n"
+        f"{vehicle_name} -- {part_name}"
+    )
+
+
+def _parse_vehicle_name(name: str) -> "Vehicle":
+    """Parse a PiecesAuto24 vehicle name into a Vehicle object.
+
+    Example: "PEUGEOT 208 II 3/5 portes (UB_, UP_...) 1.2 PureTech 110"
+    """
+    from src.db.models import Vehicle
+
+    parts = name.split()
+    brand = parts[0] if parts else ""
+
+    # Try to extract displacement (pattern like "1.2", "1.6", "2.0")
+    displacement = None
+    power_hp = None
+    fuel = None
+    engine_code = None
+    model_parts = []
+
+    for i, p in enumerate(parts[1:], 1):
+        if re.match(r"^\d+\.\d+$", p):
+            displacement = p
+            # Look ahead for power and fuel
+            remaining = " ".join(parts[i + 1:])
+            hp_match = re.search(r"(\d+)\s*CV", remaining)
+            if hp_match:
+                power_hp = int(hp_match.group(1))
+            if "Diesel" in remaining or "HDi" in remaining or "BlueHDi" in remaining or "dCi" in remaining:
+                fuel = "Diesel"
+            elif "Essence" in remaining or "PureTech" in remaining or "TSI" in remaining:
+                fuel = "Essence"
+            # Engine code: typically last word if it's all uppercase letters
+            last_words = remaining.split()
+            if last_words:
+                candidate = last_words[-1]
+                if re.match(r"^[A-Z0-9]{3,}$", candidate) and not candidate.endswith("CV"):
+                    engine_code = candidate
+            break
+        else:
+            model_parts.append(p)
+
+    model = " ".join(model_parts) if model_parts else ""
+
+    return Vehicle(
+        brand=brand,
+        model=model,
+        displacement=displacement,
+        power_hp=power_hp,
+        fuel=fuel,
+        engine_code=engine_code,
+        pa24_full_name=name,
+    )
+
+
+# --- /vin command ---
+
+async def cmd_vin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/vin <VIN> — Decode VIN and associate with a vehicle in DB."""
+    chat_id = update.effective_chat.id
+    text = update.message.text.replace("/vin", "").strip()
+
+    if not text or len(text) != 17:
+        await update.message.reply_text(
+            "Associer un VIN a un vehicule en base.\n\n"
+            "Usage : /vin <numero VIN 17 caracteres>\n"
+            "Exemple : /vin VF32KKFUF44254841\n\n"
+            "Le VIN se trouve sur la carte grise (case E) "
+            "ou sur la plaque du chassis (bas du pare-brise, portiere)."
+        )
+        return
+
+    from src.vin.decoder import decode_vin, validate_vin
+    try:
+        vin = validate_vin(text)
+    except ValueError as e:
+        await update.message.reply_text(f"VIN invalide: {e}")
+        return
+
+    # Decode
+    result = await decode_vin(vin)
+    explanation = "\n".join(f"  > {line}" for line in result.explanation)
+
+    # Case 1: HIGH confidence (PSA auto-detect or vin_patterns hit)
+    if result.confidence.value == "high" and result.vehicle_id:
+        confirm_id = str(uuid.uuid4())[:8]
+        pending_confirms[confirm_id] = {
+            "type": "vin_confirm",
+            "vin": vin,
+            "vehicle_id": result.vehicle_id,
+            "pa24_name": result.pa24_full_name or f"{result.make} {result.model} {result.engine or ''}",
+        }
+        keyboard = [
+            [
+                InlineKeyboardButton("Confirmer", callback_data=f"vin_ok:{confirm_id}"),
+                InlineKeyboardButton("Corriger", callback_data=f"vin_pick_brand:{confirm_id}"),
+            ]
+        ]
+        await update.message.reply_text(
+            f"VIN: {vin}\nDecodage automatique:\n{explanation}\n\n"
+            f"Vehicule identifie: {result.pa24_full_name or result.make + ' ' + (result.model or '?')}",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    # Case 2: Brand known but vehicle not identified — show vehicles from DB
+    if result.make:
+        vin_sessions[chat_id] = {
+            "vin": vin,
+            "brand": result.make,
+            "year": result.year,
+            "explanation": result.explanation,
+            "state": "pick_vehicle",
+        }
+        await _show_brand_vehicles(update, chat_id, result.make, vin, explanation)
+        return
+
+    # Case 3: WMI unknown — show brand selection
+    vin_sessions[chat_id] = {
+        "vin": vin,
+        "brand": None,
+        "year": result.year,
+        "explanation": result.explanation,
+        "state": "pick_brand",
+    }
+    await _show_brand_buttons(update, vin, explanation)
+
+
+async def _show_brand_buttons(update: Update, vin: str, explanation: str) -> None:
+    """Show brand selection buttons from DB."""
+    from src.db.repository import get_distinct_brands
+    brands = await get_distinct_brands()
+
+    if not brands:
+        await update.message.reply_text(
+            f"VIN: {vin}\n{explanation}\n\n"
+            "Aucun vehicule en base. Ajoutez d'abord des vehicules via /ref."
+        )
+        return
+
+    # Telegram limits: max 100 buttons, organize in rows of 3
+    keyboard = []
+    row = []
+    for brand in brands:
+        row.append(InlineKeyboardButton(brand, callback_data=f"vin_brand:{brand}"))
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    await update.message.reply_text(
+        f"VIN: {vin}\nDecodage:\n{explanation}\n\n"
+        "Selectionnez la marque:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def _show_brand_vehicles(
+    update_or_query, chat_id: int, brand: str, vin: str, explanation: str,
+) -> None:
+    """Show all vehicles for a brand as inline buttons."""
+    from src.db.repository import get_vehicles_by_brand
+    vehicles = await get_vehicles_by_brand(brand)
+
+    if not vehicles:
+        text = (
+            f"VIN: {vin}\nDecodage:\n{explanation}\n\n"
+            f"Aucun vehicule {brand} en base.\n"
+            "Ajoutez-le d'abord via /ref."
+        )
+        if hasattr(update_or_query, "message") and update_or_query.message:
+            await update_or_query.message.reply_text(text)
+        else:
+            await update_or_query.edit_message_text(text)
+        return
+
+    # Build buttons: show pa24_full_name, truncated if needed
+    keyboard = []
+    for v in vehicles:
+        label = v.pa24_full_name[:60] if len(v.pa24_full_name) > 60 else v.pa24_full_name
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"vin_vehicle:{v.id}")])
+
+    keyboard.append([InlineKeyboardButton("Vehicule non liste", callback_data="vin_not_listed")])
+
+    text = (
+        f"VIN: {vin}\nDecodage:\n{explanation}\n\n"
+        f"Selectionnez le vehicule {brand}:"
+    )
+    if hasattr(update_or_query, "message") and update_or_query.message:
+        await update_or_query.message.reply_text(
+            text, reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+    else:
+        await update_or_query.edit_message_text(
+            text, reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+
+
+async def handle_vin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /vin flow button presses."""
+    query = update.callback_query
+    await query.answer()
+    chat_id = query.message.chat_id
+    data = query.data
+
+    # Confirm auto-detected VIN
+    if data.startswith("vin_ok:"):
+        confirm_id = data.split(":", 1)[1]
+        info = pending_confirms.pop(confirm_id, None)
+        if not info:
+            await query.edit_message_text("Confirmation expiree.")
+            return
+        from src.db.repository import add_vin_pattern
+        vin_pattern = info["vin"][:13]
+        await add_vin_pattern(vin_pattern, info["vehicle_id"])
+        await query.edit_message_text(
+            f"Enregistre.\nPattern {vin_pattern} -> {info['pa24_name']}"
+        )
+        return
+
+    # Correct: go to brand selection
+    if data.startswith("vin_pick_brand:"):
+        confirm_id = data.split(":", 1)[1]
+        info = pending_confirms.pop(confirm_id, None)
+        if info:
+            vin_sessions[chat_id] = {
+                "vin": info["vin"],
+                "brand": None,
+                "year": None,
+                "explanation": [],
+                "state": "pick_brand",
+            }
+        session = vin_sessions.get(chat_id)
+        if not session:
+            await query.edit_message_text("Session expiree. Utilisez /vin.")
+            return
+        from src.db.repository import get_distinct_brands
+        brands = await get_distinct_brands()
+        if not brands:
+            await query.edit_message_text("Aucun vehicule en base. Utilisez /ref d'abord.")
+            return
+        keyboard = []
+        row = []
+        for brand in brands:
+            row.append(InlineKeyboardButton(brand, callback_data=f"vin_brand:{brand}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        await query.edit_message_text(
+            "Selectionnez la marque:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    # Brand selected
+    if data.startswith("vin_brand:"):
+        brand = data.split(":", 1)[1]
+        session = vin_sessions.get(chat_id)
+        if not session:
+            await query.edit_message_text("Session expiree. Utilisez /vin.")
+            return
+        session["brand"] = brand
+        session["state"] = "pick_vehicle"
+        vin = session["vin"]
+        explanation = "\n".join(f"  > {line}" for line in session.get("explanation", []))
+        await _show_brand_vehicles(query, chat_id, brand, vin, explanation)
+        return
+
+    # Vehicle selected
+    if data.startswith("vin_vehicle:"):
+        vehicle_id = int(data.split(":", 1)[1])
+        session = vin_sessions.get(chat_id)
+        if not session:
+            await query.edit_message_text("Session expiree. Utilisez /vin.")
+            return
+
+        from src.db.repository import get_vehicle_by_id
+        vehicle = await get_vehicle_by_id(vehicle_id)
+        if not vehicle:
+            await query.edit_message_text("Vehicule non trouve.")
+            return
+
+        confirm_id = str(uuid.uuid4())[:8]
+        pending_confirms[confirm_id] = {
+            "type": "vin_confirm",
+            "vin": session["vin"],
+            "vehicle_id": vehicle_id,
+            "pa24_name": vehicle.pa24_full_name,
+        }
+        keyboard = [
+            [
+                InlineKeyboardButton("Confirmer", callback_data=f"vin_ok:{confirm_id}"),
+                InlineKeyboardButton("Annuler", callback_data=f"vin_cancel:{confirm_id}"),
+            ]
+        ]
+        vin_pattern = session["vin"][:13]
+        await query.edit_message_text(
+            f"Pattern {vin_pattern} -> {vehicle.pa24_full_name}",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        vin_sessions.pop(chat_id, None)
+        return
+
+    # Vehicle not listed
+    if data == "vin_not_listed":
+        vin_sessions.pop(chat_id, None)
+        await query.edit_message_text(
+            "Ce vehicule n'est pas dans la base.\n"
+            "Ajoutez-le d'abord via /ref avec des screenshots PiecesAuto24."
+        )
+        return
+
+    # Cancel
+    if data.startswith("vin_cancel:"):
+        confirm_id = data.split(":", 1)[1]
+        pending_confirms.pop(confirm_id, None)
+        vin_sessions.pop(chat_id, None)
+        await query.edit_message_text("Annule.")
+        return
+
+
+# --- /get command (reference lookup) ---
+
+# /get session: {chat_id: {state, vehicle_id, vehicle_name, brand}}
+get_sessions: dict[int, dict] = {}
+
+
+
+async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/get — Look up references for a vehicle+part from DB."""
+    chat_id = update.effective_chat.id
+    get_sessions[chat_id] = {"state": "pick_brand", "vehicle_id": None, "vehicle_name": None}
+
+    from src.db.repository import get_distinct_brands
+    brands = await get_distinct_brands()
+    if not brands:
+        await update.message.reply_text("Aucun vehicule en base.")
+        return
+
+    keyboard = []
+    row = []
+    for brand in brands:
+        row.append(InlineKeyboardButton(brand, callback_data=f"get_brand:{brand}"))
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    await update.message.reply_text(
+        "\U0001F3E2 Selectionnez la marque :", reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def handle_get_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /get flow callbacks."""
+    query = update.callback_query
+    await query.answer()
+    chat_id = query.message.chat_id
+    data = query.data
+    session = get_sessions.get(chat_id)
+
+    if data == "noop":
+        return
+
+    if not session:
+        await query.edit_message_text("Session expiree. Utilisez /ref.")
+        return
+
+    # Back buttons for /get
+    if data == "getback_brands":
+        from src.db.repository import get_distinct_brands
+        brands = await get_distinct_brands()
+        keyboard = []
+        row = []
+        for brand in brands:
+            row.append(InlineKeyboardButton(brand, callback_data=f"get_brand:{brand}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        await query.edit_message_text(
+            "\U0001F3E2 Selectionnez la marque :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data == "getback_models":
+        brand = session.get("brand", "")
+        from src.db.repository import get_distinct_models
+        models = await get_distinct_models(brand)
+        session["models"] = models
+        from src.telegram.ui import format_model_label
+        keyboard = []
+        row = []
+        for i, model in enumerate(models):
+            label = format_model_label(brand, model)
+            row.append(InlineKeyboardButton(label, callback_data=f"get_model:{i}"))
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_brands")])
+        await query.edit_message_text(
+            f"\U0001F697 Selectionnez le modele {brand} :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data == "getback_years":
+        brand = session.get("brand", "")
+        model = session.get("model", "")
+        from src.db.repository import get_distinct_years_for_model
+        years = await get_distinct_years_for_model(brand, model)
+        keyboard = []
+        row = []
+        for y in years:
+            row.append(InlineKeyboardButton(str(y), callback_data=f"get_year:{y}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_models")])
+        await query.edit_message_text(
+            f"\U0001F4C5 Selectionnez l'annee {brand} {model} :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    # Brand selected
+    if data.startswith("get_brand:"):
+        brand = data.split(":", 1)[1]
+        session["brand"] = brand
+        session["state"] = "pick_model"
+        from src.db.repository import get_distinct_models
+        models = await get_distinct_models(brand)
+        if not models:
+            await query.edit_message_text(f"Aucun modele {brand} en base.")
+            return
+        session["models"] = models
+        from src.telegram.ui import format_model_label
+        keyboard = []
+        row = []
+        for i, model in enumerate(models):
+            label = format_model_label(brand, model)
+            row.append(InlineKeyboardButton(label, callback_data=f"get_model:{i}"))
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_brands")])
+        await query.edit_message_text(
+            f"\U0001F697 Selectionnez le modele {brand} :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    # Model selected — show year buttons
+    if data.startswith("get_model:"):
+        idx = int(data.split(":", 1)[1])
+        brand = session.get("brand", "")
+        models = session.get("models", [])
+        model = models[idx] if idx < len(models) else ""
+        session["model"] = model
+        from src.db.repository import get_distinct_years_for_model
+        years = await get_distinct_years_for_model(brand, model)
+        if not years:
+            await query.edit_message_text(f"\u26A0\uFE0F Aucune annee pour {brand} {model}.")
+            return
+        session["state"] = "pick_year"
+        keyboard = []
+        row = []
+        for y in years:
+            row.append(InlineKeyboardButton(str(y), callback_data=f"get_year:{y}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_models")])
+        await query.edit_message_text(
+            f"\U0001F4C5 Selectionnez l'annee {brand} {model} :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    # Year selected for /get
+    if data.startswith("get_year:"):
+        year = int(data.split(":", 1)[1])
+        brand = session.get("brand", "")
+        model = session.get("model", "")
+        await _get_handle_year(query, session, brand, model, year)
+        return
+
+    # Engine selected
+    if data.startswith("get_engine:"):
+        vehicle_id = int(data.split(":", 1)[1])
+        from src.db.repository import get_vehicle_by_id
+        vehicle = await get_vehicle_by_id(vehicle_id)
+        if not vehicle:
+            await query.edit_message_text("Vehicule non trouve.")
+            return
+        session["vehicle_id"] = vehicle_id
+        session["vehicle_name"] = vehicle.pa24_full_name
+        session["state"] = "pick_part"
+        await _show_parts_list(query, session)
+        return
+
+    # Part selected by index
+    if data.startswith("get_part:"):
+        idx = int(data.split(":", 1)[1])
+        parts = session.get("parts", [])
+        if idx < len(parts):
+            await _display_refs(query, chat_id, parts[idx])
+        else:
+            await query.edit_message_text("Piece non trouvee.")
+        return
+
+    # Another part
+    if data == "get_another":
+        await _show_parts_list(query, session)
+        return
+
+
+async def _get_handle_year(query, session: dict, brand: str, model: str, year: int) -> None:
+    """After year selected in /get flow, show engine or auto-select."""
+    from src.db.repository import get_vehicles_for_model_year
+    vehicles = await get_vehicles_for_model_year(brand, model, year)
+    if not vehicles:
+        await query.edit_message_text(f"\u26A0\uFE0F Aucune motorisation pour {brand} {model} {year}.")
+        return
+    if len(vehicles) == 1:
+        v = vehicles[0]
+        session["vehicle_id"] = v.id
+        session["vehicle_name"] = v.pa24_full_name
+        session["state"] = "pick_part"
+        await _show_parts_list(query, session)
+        return
+    from src.telegram.ui import format_engine_label, grid_buttons
+    items = [(format_engine_label(v), f"get_engine:{v.id}") for v in vehicles]
+    keyboard = grid_buttons(items, cols=2)
+    keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_years")])
+    await query.edit_message_text(
+        f"\u2699\uFE0F Selectionnez la motorisation {brand} {model} {year} :",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+def _short_engine_label(v) -> str:
+    parts = []
+    if v.displacement:
+        parts.append(v.displacement)
+    if v.power_hp:
+        parts.append(f"{v.power_hp}CV")
+    if v.fuel:
+        parts.append(v.fuel)
+    if v.engine_code:
+        parts.append(v.engine_code)
+    return " ".join(parts) if parts else v.pa24_full_name[:40]
+
+
+async def _show_parts_list(query, session: dict) -> None:
+    """Show available parts for the selected vehicle from DB."""
+    from src.db.repository import get_parts_for_vehicle
+    parts = await get_parts_for_vehicle(session["vehicle_id"])
+    session["parts"] = parts
+
+    if not parts:
+        await query.edit_message_text(
+            f"\u26A0\uFE0F {session['vehicle_name']}\n\nAucune piece en base pour ce vehicule.",
+        )
+        return
+
+    from src.telegram.ui import build_parts_keyboard
+    tail = [[InlineKeyboardButton("\u2B05 Retour", callback_data="getback_years")]]
+    keyboard = build_parts_keyboard(parts, callback_prefix="get_part", tail_rows=tail)
+    await query.edit_message_text(
+        f"\U0001F697 {session['vehicle_name']}\n"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
+        "\U0001F527 Selectionnez la piece :",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def _display_refs(query, chat_id: int, part_name: str) -> None:
+    """Display references from DB for operator, grouped by type."""
+    session = get_sessions.get(chat_id)
+    if not session or not session["vehicle_id"]:
+        await query.edit_message_text("Session expiree.")
+        return
+
+    from src.db.repository import lookup_references_grouped
+    grouped = await lookup_references_grouped(session["vehicle_id"], part_name)
+
+    oe = grouped["oe"]
+    main = grouped["main_product"]
+    equiv = grouped["equivalent"]
+    xref = grouped["cross_reference"]
+
+    lines = [
+        f"\U0001F697 {session['vehicle_name']}",
+        f"\U0001F527 {part_name}",
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
+        "",
+    ]
+
+    if oe:
+        lines.append("\U0001F3ED References OE (constructeur) :")
+        for r in oe:
+            lines.append(f"  \u2022 {r.brand} \u2014 {r.reference}")
+        lines.append("")
+
+    combined_equiv = main + equiv
+    if combined_equiv:
+        lines.append("\U0001F504 References equivalentes :")
+        for r in combined_equiv:
+            lines.append(f"  \u2022 {r.brand} \u2014 {r.reference}")
+        lines.append("")
+
+    if xref:
+        lines.append("\U0001F517 Cross-references :")
+        for r in xref:
+            lines.append(f"  \u2022 {r.brand} \u2014 {r.reference}")
+        lines.append("")
+
+    total = len(oe) + len(combined_equiv) + len(xref)
+    if total == 0:
+        lines.append("\u26A0\uFE0F Aucune reference en base pour cette piece.")
+    else:
+        lines.append(f"\U0001F4CA Total: {total} references")
+
+    keyboard = [[InlineKeyboardButton("\U0001F527 Autre piece", callback_data="get_another")]]
+    await query.edit_message_text(
+        "\n".join(lines), reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+# --- /dispo command (CDG availability check) ---
+
+# /dispo sessions: {chat_id: {state, vehicle_id, vehicle_name, brand, models, parts, confirmed_part, pending_part, pending_reference}}
+dispo_sessions: dict[int, dict] = {}
+
+
+async def cmd_dispo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/dispo — Check part availability and price on CDG."""
+    chat_id = update.effective_chat.id
+    text = update.message.text.replace("/dispo", "").strip()
+
+    if not text:
+        # No text — start vehicle selection
+        dispo_sessions[chat_id] = {"state": "pick_brand", "vehicle_id": None, "vehicle_name": None}
+        from src.db.repository import get_distinct_brands
+        brands = await get_distinct_brands()
+        if not brands:
+            await update.message.reply_text("Aucun vehicule en base.")
+            return
+        keyboard = []
+        row = []
+        for brand in brands:
+            row.append(InlineKeyboardButton(brand, callback_data=f"dispo_brand:{brand}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        await update.message.reply_text(
+            "\U0001F50D *Disponibilite CDG*\n"
+            "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
+            "\U0001F3E2 Selectionnez la marque, ou tapez :\n"
+            "`/dispo Kia Picanto filtre a huile`\n"
+            "`/dispo K015578XS`",
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    # Text provided — use same LLM parsing as client bot
+    dispo_sessions[chat_id] = {"state": "parsing", "vehicle_id": None, "vehicle_name": None}
+    session = dispo_sessions[chat_id]
+
+    # Check if bare reference
+    if (re.match(r"^[A-Za-z0-9][-A-Za-z0-9./]{3,25}$", text.strip())
+            and not text.strip().isdigit()
+            and re.search(r"\d", text.strip())):
+        await update.message.reply_text(
+            f"\U0001F50D Recherche CDG en cours...\n\nReference : {text.strip().upper()}"
+        )
+        from src.chain import search_reference
+        result_text = await search_reference(text.strip().upper())
+        try:
+            await update.message.reply_text(result_text, parse_mode="MarkdownV2")
+        except Exception:
+            await update.message.reply_text(result_text.replace("\\", ""))
+        dispo_sessions.pop(chat_id, None)
+        return
+
+    # Try LLM parsing for brand+model+part
+    from src.interpreter.llm import parse_vehicle_query
+    from src.db.repository import get_distinct_brands, get_distinct_models, get_vehicles_for_model
+
+    brands_list = await get_distinct_brands()
+    try:
+        data = await parse_vehicle_query(text, brands_list)
+    except Exception:
+        await update.message.reply_text("Impossible d'interpreter la demande.")
+        dispo_sessions.pop(chat_id, None)
+        return
+
+    reference = data.get("reference")
+    if reference:
+        await update.message.reply_text(
+            f"\U0001F50D Recherche CDG en cours...\n\nReference : {reference}"
+        )
+        from src.chain import search_reference
+        result_text = await search_reference(reference)
+        try:
+            await update.message.reply_text(result_text, parse_mode="MarkdownV2")
+        except Exception:
+            await update.message.reply_text(result_text.replace("\\", ""))
+        dispo_sessions.pop(chat_id, None)
+        return
+
+    brand = data.get("brand")
+    model = data.get("model")
+    year = data.get("year")
+    part = data.get("part")
+
+    if not brand:
+        await update.message.reply_text(
+            "\u2753 Marque non reconnue. Precisez la marque (ex: Volkswagen Polo 6) "
+            "ou utilisez /dispo sans texte."
+        )
+        dispo_sessions.pop(chat_id, None)
+        return
+
+    matched_brand = None
+    for b in brands_list:
+        if b.upper() == brand.upper():
+            matched_brand = b
+            break
+    if not matched_brand:
+        await update.message.reply_text(f"Marque '{brand}' non trouvee en base.")
+        dispo_sessions.pop(chat_id, None)
+        return
+
+    session["brand"] = matched_brand
+    session["pending_part"] = part
+
+    if model:
+        models = await get_distinct_models(matched_brand)
+        matched_model = None
+        for m in models:
+            if m.upper() == model.upper():
+                matched_model = m
+                break
+        if matched_model:
+            session["model"] = matched_model
+            from src.db.repository import get_distinct_years_for_model
+            years = await get_distinct_years_for_model(matched_brand, matched_model)
+            if not years:
+                await update.message.reply_text(f"\u26A0\uFE0F Aucune annee pour {matched_brand} {matched_model}.")
+                dispo_sessions.pop(chat_id, None)
+                return
+            # If LLM extracted a year that matches DB, show as confirmation
+            if year and year in years:
+                session["state"] = "pick_year"
+                keyboard = [[InlineKeyboardButton(f"\u2705 {year}", callback_data=f"dispo_year:{year}")]]
+                await update.message.reply_text(
+                    f"\U0001F697 {matched_brand} {matched_model}\n\n"
+                    f"\U0001F4C5 Annee detectee : {year}\nConfirmez :",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                )
+                return
+            # Always show year buttons
+            session["state"] = "pick_year"
+            keyboard = []
+            row = []
+            for y in years:
+                row.append(InlineKeyboardButton(str(y), callback_data=f"dispo_year:{y}"))
+                if len(row) == 3:
+                    keyboard.append(row)
+                    row = []
+            if row:
+                keyboard.append(row)
+            await update.message.reply_text(
+                f"\U0001F697 {matched_brand} {matched_model}\n\n"
+                "\U0001F4C5 Selectionnez l'annee :",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+            return
+
+    # Brand only — show models
+    session["state"] = "pick_model"
+    models = await get_distinct_models(matched_brand)
+    session["models"] = models
+    from src.telegram.ui import format_model_label
+    keyboard = []
+    row = []
+    for i, m in enumerate(models):
+        label = format_model_label(matched_brand, m)
+        row.append(InlineKeyboardButton(label, callback_data=f"dispo_model:{i}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    await update.message.reply_text(
+        f"\U0001F697 Selectionnez le modele {matched_brand} :",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def _dispo_resolve_and_search(update_or_query, chat_id: int, part_text: str) -> None:
+    """Resolve part name then search CDG for the operator."""
+    session = dispo_sessions.get(chat_id)
+    if not session or not session["vehicle_id"]:
+        return
+
+    # Use client bot's matching logic
+    from src.telegram.client_bot import _match_part_to_db
+    matched = await _match_part_to_db(session["vehicle_id"], part_text)
+
+    # Handle __not_available__
+    if len(matched) == 1 and matched[0].startswith("__not_available__:"):
+        interpreted = matched[0].split(":", 1)[1]
+        matched = []
+        part_text = interpreted
+
+    is_query = hasattr(update_or_query, 'edit_message_text')
+
+    if len(matched) == 1:
+        await _dispo_do_search(update_or_query, chat_id, matched[0])
+        return
+
+    if len(matched) > 1:
+        session["parts"] = matched
+        from src.telegram.ui import build_parts_keyboard
+        keyboard = build_parts_keyboard(matched, "dispo_part")
+        text = "Precisez la piece :"
+        if is_query:
+            await update_or_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            await update_or_query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    # No match — show all parts
+    from src.db.repository import get_parts_for_vehicle
+    from src.telegram.ui import build_parts_keyboard
+    all_parts = await get_parts_for_vehicle(session["vehicle_id"])
+    session["parts"] = all_parts
+    keyboard = build_parts_keyboard(all_parts, "dispo_part")
+    msg = f"'{part_text}' non disponible.\nSelectionnez :"
+    if is_query:
+        await update_or_query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await update_or_query.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def _dispo_handle_year(query, chat_id: int, session: dict, brand: str, model: str, year: int) -> None:
+    """After year selected in /dispo flow, show engine or auto-select."""
+    from src.db.repository import get_vehicles_for_model_year
+    vehicles = await get_vehicles_for_model_year(brand, model, year)
+    if not vehicles:
+        await query.edit_message_text(f"\u26A0\uFE0F Aucune motorisation pour {brand} {model} {year}.")
+        return
+    if len(vehicles) == 1:
+        v = vehicles[0]
+        session["vehicle_id"] = v.id
+        session["vehicle_name"] = v.pa24_full_name
+        pending = session.get("pending_part")
+        if pending:
+            await _dispo_resolve_and_search(query, chat_id, pending)
+        else:
+            await _dispo_show_parts(query, chat_id)
+        return
+    from src.telegram.ui import format_engine_label, grid_buttons
+    items = [(format_engine_label(v), f"dispo_engine:{v.id}") for v in vehicles]
+    keyboard = grid_buttons(items, cols=2)
+    keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_years")])
+    await query.edit_message_text(
+        f"\u2699\uFE0F Selectionnez la motorisation {brand} {model} {year} :",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def _dispo_show_parts(update_or_query, chat_id: int) -> None:
+    """Show available parts for the dispo vehicle."""
+    session = dispo_sessions.get(chat_id)
+    if not session:
+        return
+    from src.db.repository import get_parts_for_vehicle
+    parts = await get_parts_for_vehicle(session["vehicle_id"])
+    session["parts"] = parts
+
+    is_query = hasattr(update_or_query, 'edit_message_text')
+
+    if not parts:
+        text = "\u26A0\uFE0F Aucune piece en base pour ce vehicule."
+        if is_query:
+            await update_or_query.edit_message_text(text)
+        else:
+            await update_or_query.message.reply_text(text)
+        return
+
+    from src.telegram.ui import build_parts_keyboard
+    keyboard = build_parts_keyboard(parts, "dispo_part")
+    text = (
+        f"\U0001F697 {session['vehicle_name']}\n"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
+        "\U0001F527 Selectionnez la piece :"
+    )
+    if is_query:
+        await update_or_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await update_or_query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def _dispo_do_search(update_or_query, chat_id: int, part_name: str) -> None:
+    """Search CDG for a vehicle+part and show results."""
+    session = dispo_sessions.get(chat_id)
+    if not session:
+        return
+
+    vehicle_id = session["vehicle_id"]
+    vehicle_name = session["vehicle_name"]
+    is_query = hasattr(update_or_query, 'edit_message_text')
+
+    loading = f"\U0001F50D Recherche CDG en cours...\n\n\U0001F697 {vehicle_name}\n\U0001F527 {part_name}"
+    if is_query:
+        await update_or_query.edit_message_text(loading)
+    else:
+        await update_or_query.message.reply_text(loading)
+
+    from src.chain import search_part
+    result_text = await search_part(vehicle_id, vehicle_name, part_name)
+
+    keyboard = [
+        [InlineKeyboardButton("\U0001F527 Autre piece", callback_data="dispo_another")],
+    ]
+    if is_query:
+        try:
+            await update_or_query.edit_message_text(result_text, parse_mode="MarkdownV2", reply_markup=InlineKeyboardMarkup(keyboard))
+        except Exception:
+            await update_or_query.edit_message_text(result_text.replace("\\", ""), reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        try:
+            await update_or_query.message.reply_text(result_text, parse_mode="MarkdownV2", reply_markup=InlineKeyboardMarkup(keyboard))
+        except Exception:
+            await update_or_query.message.reply_text(result_text.replace("\\", ""), reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def handle_dispo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /dispo flow callbacks."""
+    query = update.callback_query
+    await query.answer()
+    chat_id = query.message.chat_id
+    data = query.data
+    session = dispo_sessions.get(chat_id)
+
+    if not session:
+        await query.edit_message_text("Session expiree. Utilisez /dispo.")
+        return
+
+    # Back buttons for /dispo
+    if data == "dispoback_brands":
+        from src.db.repository import get_distinct_brands
+        brands = await get_distinct_brands()
+        keyboard = []
+        row = []
+        for brand in brands:
+            row.append(InlineKeyboardButton(brand, callback_data=f"dispo_brand:{brand}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        await query.edit_message_text(
+            "\U0001F3E2 Selectionnez la marque :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data == "dispoback_models":
+        brand = session.get("brand", "")
+        from src.db.repository import get_distinct_models
+        from src.telegram.ui import format_model_label
+        models = await get_distinct_models(brand)
+        session["models"] = models
+        keyboard = []
+        row = []
+        for i, model in enumerate(models):
+            label = format_model_label(brand, model)
+            row.append(InlineKeyboardButton(label, callback_data=f"dispo_model:{i}"))
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_brands")])
+        await query.edit_message_text(
+            f"\U0001F697 Selectionnez le modele {brand} :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data == "dispoback_years":
+        brand = session.get("brand", "")
+        model = session.get("model", "")
+        from src.db.repository import get_distinct_years_for_model
+        years = await get_distinct_years_for_model(brand, model)
+        keyboard = []
+        row = []
+        for y in years:
+            row.append(InlineKeyboardButton(str(y), callback_data=f"dispo_year:{y}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_models")])
+        await query.edit_message_text(
+            f"\U0001F4C5 Selectionnez l'annee {brand} {model} :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data.startswith("dispo_brand:"):
+        brand = data.split(":", 1)[1]
+        session["brand"] = brand
+        session["state"] = "pick_model"
+        from src.db.repository import get_distinct_models
+        from src.telegram.ui import format_model_label
+        models = await get_distinct_models(brand)
+        if not models:
+            await query.edit_message_text(f"Aucun modele {brand} en base.")
+            return
+        session["models"] = models
+        keyboard = []
+        row = []
+        for i, model in enumerate(models):
+            label = format_model_label(brand, model)
+            row.append(InlineKeyboardButton(label, callback_data=f"dispo_model:{i}"))
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_brands")])
+        await query.edit_message_text(
+            f"\U0001F697 Selectionnez le modele {brand} :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data.startswith("dispo_model:"):
+        idx = int(data.split(":", 1)[1])
+        brand = session.get("brand", "")
+        models = session.get("models", [])
+        model = models[idx] if idx < len(models) else ""
+        session["model"] = model
+        from src.db.repository import get_distinct_years_for_model
+        years = await get_distinct_years_for_model(brand, model)
+        if not years:
+            await query.edit_message_text(f"\u26A0\uFE0F Aucune annee pour {brand} {model}.")
+            return
+        session["state"] = "pick_year"
+        keyboard = []
+        row = []
+        for y in years:
+            row.append(InlineKeyboardButton(str(y), callback_data=f"dispo_year:{y}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_models")])
+        await query.edit_message_text(
+            f"\U0001F4C5 Selectionnez l'annee {brand} {model} :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data.startswith("dispo_year:"):
+        year = int(data.split(":", 1)[1])
+        brand = session.get("brand", "")
+        model = session.get("model", "")
+        await _dispo_handle_year(query, chat_id, session, brand, model, year)
+        return
+
+    if data.startswith("dispo_engine:"):
+        vehicle_id = int(data.split(":", 1)[1])
+        from src.db.repository import get_vehicle_by_id
+        vehicle = await get_vehicle_by_id(vehicle_id)
+        if not vehicle:
+            await query.edit_message_text("Vehicule non trouve.")
+            return
+        session["vehicle_id"] = vehicle_id
+        session["vehicle_name"] = vehicle.pa24_full_name
+        pending = session.get("pending_part")
+        if pending:
+            await _dispo_resolve_and_search(query, chat_id, pending)
+        else:
+            await _dispo_show_parts(query, chat_id)
+        return
+
+    if data.startswith("dispo_part:"):
+        idx = int(data.split(":", 1)[1])
+        parts = session.get("parts", [])
+        if idx < len(parts):
+            await _dispo_do_search(query, chat_id, parts[idx])
+        return
+
+    if data == "dispo_another":
+        await _dispo_show_parts(query, chat_id)
+        return
+
+
+# --- /stats command ---
+
+async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/stats — Show database statistics."""
+    from src.db.repository import get_stats
+    stats = await get_stats()
+    await update.message.reply_text(
+        "\U0001F4CA *Statistiques*\n"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
+        f"\U0001F697 Vehicules: *{stats['vehicles']}*\n"
+        f"\U0001F527 References: *{stats['references']}*\n"
+        f"\U0001F522 Patterns VIN: *{stats['vin_patterns']}*\n"
+        f"\U0001F4C8 Requetes aujourd'hui: *{stats['requests_today']}*",
+        parse_mode="MarkdownV2",
+    )
+
+
+# --- Free text handler (reference search, like client bot) ---
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle free text: bare reference -> CDG search, or vehicle+part text."""
+    text = (update.message.text or "").strip()
+    if not text:
+        return
+
+    chat_id = update.effective_chat.id
+
+    # Check if text looks like a bare reference code
+    bare_ref = text.strip()
+    if (re.match(r"^[A-Za-z0-9][-A-Za-z0-9./]{3,25}$", bare_ref)
+            and not bare_ref.isdigit()
+            and re.search(r"\d", bare_ref)):
+        await update.message.reply_text(
+            f"\U0001F50D Recherche CDG en cours...\n\nReference : {bare_ref.upper()}"
+        )
+        from src.chain import search_reference
+        result_text = await search_reference(bare_ref.upper())
+        try:
+            await update.message.reply_text(result_text, parse_mode="MarkdownV2")
+        except Exception:
+            await update.message.reply_text(result_text.replace("\\", ""))
+        return
+
+    # Try LLM parsing for brand+model+part (same as /dispo with text)
+    dispo_sessions[chat_id] = {"state": "parsing", "vehicle_id": None, "vehicle_name": None}
+    session = dispo_sessions[chat_id]
+
+    from src.interpreter.llm import parse_vehicle_query
+    from src.db.repository import get_distinct_brands, get_distinct_models
+
+    brands_list = await get_distinct_brands()
+    try:
+        data = await parse_vehicle_query(text, brands_list)
+    except Exception:
+        await update.message.reply_text("Tapez /dispo ou /ref pour commencer une recherche.")
+        dispo_sessions.pop(chat_id, None)
+        return
+
+    reference = data.get("reference")
+    if reference:
+        await update.message.reply_text(
+            f"\U0001F50D Recherche CDG en cours...\n\nReference : {reference}"
+        )
+        from src.chain import search_reference
+        result_text = await search_reference(reference)
+        try:
+            await update.message.reply_text(result_text, parse_mode="MarkdownV2")
+        except Exception:
+            await update.message.reply_text(result_text.replace("\\", ""))
+        dispo_sessions.pop(chat_id, None)
+        return
+
+    brand = data.get("brand")
+    if not brand:
+        await update.message.reply_text(
+            "\u2753 Je n'ai pas reconnu la marque. Precisez par exemple "
+            "'Volkswagen Polo 6 amortisseur arriere', ou tapez /guide."
+        )
+        dispo_sessions.pop(chat_id, None)
+        return
+
+    matched_brand = None
+    for b in brands_list:
+        if b.upper() == brand.upper():
+            matched_brand = b
+            break
+    if not matched_brand:
+        await update.message.reply_text(f"Marque '{brand}' non trouvee en base.")
+        dispo_sessions.pop(chat_id, None)
+        return
+
+    session["brand"] = matched_brand
+    session["pending_part"] = data.get("part")
+    model = data.get("model")
+    year = data.get("year")
+
+    if model:
+        models = await get_distinct_models(matched_brand)
+        matched_model = None
+        for m in models:
+            if m.upper() == model.upper():
+                matched_model = m
+                break
+        if matched_model:
+            session["model"] = matched_model
+            from src.db.repository import get_distinct_years_for_model
+            years = await get_distinct_years_for_model(matched_brand, matched_model)
+            if not years:
+                await update.message.reply_text(f"\u26A0\uFE0F Aucune annee pour {matched_brand} {matched_model}.")
+                dispo_sessions.pop(chat_id, None)
+                return
+            if year and year in years:
+                session["state"] = "pick_year"
+                keyboard = [[InlineKeyboardButton(f"\u2705 {year}", callback_data=f"dispo_year:{year}")]]
+                await update.message.reply_text(
+                    f"\U0001F697 {matched_brand} {matched_model}\n\n"
+                    f"\U0001F4C5 Annee detectee : {year}\nConfirmez :",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                )
+                return
+            session["state"] = "pick_year"
+            keyboard = []
+            row = []
+            for y in years:
+                row.append(InlineKeyboardButton(str(y), callback_data=f"dispo_year:{y}"))
+                if len(row) == 3:
+                    keyboard.append(row)
+                    row = []
+            if row:
+                keyboard.append(row)
+            await update.message.reply_text(
+                f"\U0001F697 {matched_brand} {matched_model}\n\n"
+                "\U0001F4C5 Selectionnez l'annee :",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+            return
+
+    # Brand only — show models
+    session["state"] = "pick_model"
+    models = await get_distinct_models(matched_brand)
+    session["models"] = models
+    from src.telegram.ui import format_model_label
+    keyboard = []
+    row = []
+    for i, m in enumerate(models):
+        label = format_model_label(matched_brand, m)
+        row.append(InlineKeyboardButton(label, callback_data=f"dispo_model:{i}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    await update.message.reply_text(
+        f"\U0001F697 Selectionnez le modele {matched_brand} :",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+# --- Bot builder ---
+
+def build_operator_app() -> Application:
+    """Build and return the operator bot Application."""
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("guide", cmd_guide))
+    app.add_handler(CommandHandler("ajouter_ref", cmd_ajouter_ref))
+    app.add_handler(CommandHandler("vin", cmd_vin))
+    app.add_handler(CommandHandler("ref", cmd_get))
+    app.add_handler(CommandHandler("get", cmd_get))  # legacy alias
+    app.add_handler(CommandHandler("dispo", cmd_dispo))
+    app.add_handler(CommandHandler("stats", cmd_stats))
+    app.add_handler(CallbackQueryHandler(handle_ref_callback, pattern=r"^ref_"))
+    app.add_handler(CallbackQueryHandler(handle_vin_callback, pattern=r"^vin_"))
+    app.add_handler(CallbackQueryHandler(handle_get_callback, pattern=r"^(get_|getback_)"))
+    app.add_handler(CallbackQueryHandler(handle_dispo_callback, pattern=r"^(dispo_|dispoback_)"))
+
+    async def _noop_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await update.callback_query.answer()
+
+    app.add_handler(CallbackQueryHandler(_noop_cb, pattern=r"^noop$"))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    return app

@@ -1,0 +1,336 @@
+{
+  "constructor": "Ford",
+  "wmi_codes": [
+    "WF0"
+  ],
+  "model_positions": [
+    6,
+    7
+  ],
+  "engine_positions": [
+    8
+  ],
+  "vin_models": {
+    "AX": "Ka II",
+    "WF": "Fiesta VI / VII",
+    "JH": "Fiesta VIII",
+    "DA": "Focus I",
+    "DB": "Focus II / C-Max I",
+    "GC": "Focus III",
+    "GE": "Focus IV",
+    "GB": "Mondeo IV",
+    "GD": "Mondeo V",
+    "GA": "C-Max II / Grand C-Max",
+    "DR": "Kuga I",
+    "UW": "Kuga I",
+    "ZG": "Kuga II / III",
+    "E1": "EcoSport",
+    "CX": "Puma",
+    "AB": "Transit Custom",
+    "AH": "Transit Connect",
+    "TT": "Transit",
+    "FA": "Galaxy II",
+    "FD": "S-Max I / II"
+  },
+  "models": {
+    "Ka II": {
+      "years": [
+        2008,
+        2016
+      ],
+      "engines": [
+        "A",
+        "B",
+        "S"
+      ]
+    },
+    "Fiesta VI / VII": {
+      "years": [
+        2008,
+        2017
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "E",
+        "F",
+        "S"
+      ]
+    },
+    "Fiesta VIII": {
+      "years": [
+        2017,
+        2023
+      ],
+      "engines": [
+        "A",
+        "H",
+        "K",
+        "E",
+        "M"
+      ]
+    },
+    "Focus I": {
+      "years": [
+        1998,
+        2004
+      ],
+      "engines": [
+        "B",
+        "C",
+        "F",
+        "G"
+      ]
+    },
+    "Focus II / C-Max I": {
+      "years": [
+        2004,
+        2011
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Focus III": {
+      "years": [
+        2011,
+        2018
+      ],
+      "engines": [
+        "A",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G"
+      ]
+    },
+    "Focus IV": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "A",
+        "H",
+        "J",
+        "M"
+      ]
+    },
+    "Mondeo IV": {
+      "years": [
+        2007,
+        2014
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F",
+        "G",
+        "N"
+      ]
+    },
+    "Mondeo V": {
+      "years": [
+        2014,
+        2022
+      ],
+      "engines": [
+        "D",
+        "G",
+        "J"
+      ]
+    },
+    "C-Max II / Grand C-Max": {
+      "years": [
+        2010,
+        2019
+      ],
+      "engines": [
+        "A",
+        "C",
+        "E",
+        "F",
+        "G"
+      ]
+    },
+    "Kuga I": {
+      "years": [
+        2008,
+        2012
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Kuga II / III": {
+      "years": [
+        2012,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "E",
+        "G",
+        "J"
+      ]
+    },
+    "EcoSport": {
+      "years": [
+        2013,
+        2022
+      ],
+      "engines": [
+        "A",
+        "E"
+      ]
+    },
+    "Puma": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "A",
+        "H",
+        "K",
+        "M"
+      ]
+    },
+    "Transit Custom": {
+      "years": [
+        2013,
+        2025
+      ],
+      "engines": [
+        "G",
+        "J"
+      ]
+    },
+    "Transit Connect": {
+      "years": [
+        2002,
+        2025
+      ],
+      "engines": [
+        "E",
+        "F",
+        "G",
+        "J"
+      ]
+    },
+    "Transit": {
+      "years": [
+        2000,
+        2025
+      ],
+      "engines": [
+        "G",
+        "J",
+        "L"
+      ]
+    },
+    "Galaxy II": {
+      "years": [
+        2006,
+        2015
+      ],
+      "engines": [
+        "C",
+        "D",
+        "G"
+      ]
+    },
+    "S-Max I / II": {
+      "years": [
+        2006,
+        2025
+      ],
+      "engines": [
+        "C",
+        "D",
+        "G",
+        "J"
+      ]
+    }
+  },
+  "engines": {
+    "A": {
+      "desc": "1.0 EcoBoost Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "B": {
+      "desc": "1.25/1.4 Duratec Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "C": {
+      "desc": "1.6 Ti-VCT/Duratec Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "D": {
+      "desc": "2.0 GDi/EcoBoost Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "E": {
+      "desc": "1.5 TDCi/EcoBlue Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "F": {
+      "desc": "1.6 TDCi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "G": {
+      "desc": "2.0 TDCi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "H": {
+      "desc": "1.5 EcoBoost Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "J": {
+      "desc": "2.0 EcoBlue Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "K": {
+      "desc": "1.0 EcoBoost Hybride Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "L": {
+      "desc": "2.2 TDCi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "M": {
+      "desc": "1.5 EcoBlue Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "N": {
+      "desc": "2.5 Duratec Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "S": {
+      "desc": "1.4 TDCi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    }
+  }
+}

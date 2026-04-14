@@ -1,0 +1,273 @@
+{
+  "constructor": "Skoda",
+  "wmi_codes": [
+    "TMB"
+  ],
+  "model_positions": [
+    6,
+    7
+  ],
+  "engine_positions": [
+    8
+  ],
+  "vin_models": {
+    "6Y": "Fabia I",
+    "5J": "Fabia II / Roomster",
+    "NJ": "Fabia III",
+    "PJ": "Fabia IV",
+    "1Z": "Octavia II",
+    "5E": "Octavia III",
+    "NX": "Octavia IV",
+    "3T": "Superb II",
+    "3V": "Superb III",
+    "NH": "Rapid",
+    "NW": "Scala",
+    "5L": "Yeti",
+    "NU": "Karoq",
+    "NS": "Kodiaq",
+    "NE": "Kamiq",
+    "1U": "Octavia I",
+    "3U": "Superb I"
+  },
+  "models": {
+    "Fabia I": {
+      "years": [
+        1999,
+        2007
+      ],
+      "engines": [
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    },
+    "Fabia II / Roomster": {
+      "years": [
+        2007,
+        2015
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    },
+    "Fabia III": {
+      "years": [
+        2014,
+        2021
+      ],
+      "engines": [
+        "A",
+        "B",
+        "F"
+      ]
+    },
+    "Fabia IV": {
+      "years": [
+        2021,
+        2025
+      ],
+      "engines": [
+        "A",
+        "H"
+      ]
+    },
+    "Octavia I": {
+      "years": [
+        1996,
+        2004
+      ],
+      "engines": [
+        "B",
+        "C",
+        "F",
+        "G"
+      ]
+    },
+    "Octavia II": {
+      "years": [
+        2004,
+        2013
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Octavia III": {
+      "years": [
+        2013,
+        2020
+      ],
+      "engines": [
+        "A",
+        "B",
+        "D",
+        "F",
+        "G",
+        "H"
+      ]
+    },
+    "Octavia IV": {
+      "years": [
+        2020,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "G",
+        "H"
+      ]
+    },
+    "Superb I": {
+      "years": [
+        2001,
+        2008
+      ],
+      "engines": [
+        "C",
+        "D",
+        "G"
+      ]
+    },
+    "Superb II": {
+      "years": [
+        2008,
+        2015
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "G"
+      ]
+    },
+    "Superb III": {
+      "years": [
+        2015,
+        2025
+      ],
+      "engines": [
+        "B",
+        "D",
+        "G",
+        "H"
+      ]
+    },
+    "Rapid": {
+      "years": [
+        2012,
+        2019
+      ],
+      "engines": [
+        "A",
+        "B",
+        "F"
+      ]
+    },
+    "Scala": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "A",
+        "H"
+      ]
+    },
+    "Yeti": {
+      "years": [
+        2009,
+        2017
+      ],
+      "engines": [
+        "B",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Karoq": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "G",
+        "H"
+      ]
+    },
+    "Kodiaq": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Kamiq": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "A",
+        "H"
+      ]
+    }
+  },
+  "engines": {
+    "A": {
+      "desc": "1.0 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "B": {
+      "desc": "1.2/1.4 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "C": {
+      "desc": "1.6 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "D": {
+      "desc": "2.0 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "E": {
+      "desc": "1.4 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "F": {
+      "desc": "1.6 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "G": {
+      "desc": "2.0 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "H": {
+      "desc": "1.5 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    }
+  }
+}

@@ -1,0 +1,255 @@
+{
+  "constructor": "Fiat",
+  "wmi_codes": [
+    "ZFA"
+  ],
+  "model_positions": [
+    3,
+    4,
+    5
+  ],
+  "engine_positions": [
+    6
+  ],
+  "vin_models": {
+    "169": "Panda II",
+    "312": "Panda III / 500",
+    "343": "Panda III",
+    "150": "500 II",
+    "334": "500L",
+    "356": "500X",
+    "188": "Punto II",
+    "199": "Grande Punto / Punto Evo",
+    "330": "Tipo",
+    "225": "Fiorino / Qubo",
+    "263": "Doblo II",
+    "250": "Ducato III",
+    "290": "Ducato III",
+    "198": "Bravo II / Linea"
+  },
+  "models": {
+    "Panda II": {
+      "years": [
+        2003,
+        2011
+      ],
+      "engines": [
+        "A",
+        "B",
+        "D",
+        "E"
+      ]
+    },
+    "Panda III / 500": {
+      "years": [
+        2011,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "H",
+        "N",
+        "E"
+      ]
+    },
+    "Panda III": {
+      "years": [
+        2011,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "H",
+        "N",
+        "E"
+      ]
+    },
+    "500 II": {
+      "years": [
+        2007,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "H",
+        "N",
+        "E"
+      ]
+    },
+    "500L": {
+      "years": [
+        2012,
+        2022
+      ],
+      "engines": [
+        "D",
+        "H",
+        "E",
+        "F"
+      ]
+    },
+    "500X": {
+      "years": [
+        2014,
+        2025
+      ],
+      "engines": [
+        "C",
+        "D",
+        "E",
+        "F",
+        "G"
+      ]
+    },
+    "Punto II": {
+      "years": [
+        1999,
+        2010
+      ],
+      "engines": [
+        "A",
+        "B",
+        "E",
+        "F"
+      ]
+    },
+    "Grande Punto / Punto Evo": {
+      "years": [
+        2005,
+        2018
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ]
+    },
+    "Tipo": {
+      "years": [
+        2015,
+        2025
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ]
+    },
+    "Fiorino / Qubo": {
+      "years": [
+        2007,
+        2022
+      ],
+      "engines": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    "Doblo II": {
+      "years": [
+        2010,
+        2022
+      ],
+      "engines": [
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    },
+    "Ducato III": {
+      "years": [
+        2006,
+        2025
+      ],
+      "engines": [
+        "G",
+        "K",
+        "L"
+      ]
+    },
+    "Bravo II / Linea": {
+      "years": [
+        2007,
+        2014
+      ],
+      "engines": [
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    }
+  },
+  "engines": {
+    "A": {
+      "desc": "1.2 8V Fire Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "B": {
+      "desc": "1.4 8V Fire Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "C": {
+      "desc": "1.4 16V MultiAir Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "D": {
+      "desc": "0.9 TwinAir Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "E": {
+      "desc": "1.3 MultiJet Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "F": {
+      "desc": "1.6 MultiJet Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "G": {
+      "desc": "2.0 MultiJet Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "H": {
+      "desc": "1.0 FireFly Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "J": {
+      "desc": "1.6 E-Torq Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "K": {
+      "desc": "2.3 MultiJet Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "L": {
+      "desc": "3.0 MultiJet Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "N": {
+      "desc": "1.0 FireFly Hybride Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    }
+  }
+}

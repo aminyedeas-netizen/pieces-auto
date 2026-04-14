@@ -1,0 +1,1059 @@
+{
+  "constructor": "Citroen",
+  "wmi_codes": [
+    "VF7",
+    "VR7"
+  ],
+  "model_positions": [
+    3,
+    4
+  ],
+  "engine_positions": [
+    5,
+    6,
+    7
+  ],
+  "vin_models": {
+    "SA": "Saxo",
+    "LC": "C2",
+    "FC": "C3 I",
+    "SC": "C3 II",
+    "SX": "C3 III",
+    "LA": "Xsara",
+    "LB": "Xsara Picasso",
+    "NB": "C4 I",
+    "NC": "C4 II",
+    "NE": "C4 Cactus",
+    "NX": "C4 III",
+    "DC": "Xantia",
+    "RE": "C5 I",
+    "RD": "C5 II",
+    "RW": "C5 III",
+    "GA": "Berlingo I",
+    "GB": "Berlingo II",
+    "GJ": "Berlingo III",
+    "EA": "Jumpy I",
+    "EB": "Jumpy II",
+    "EE": "Jumpy III",
+    "YA": "Jumper I",
+    "YB": "Jumper II",
+    "YE": "Jumper III",
+    "TB": "C8",
+    "DD": "DS3",
+    "DE": "DS4",
+    "DF": "DS5",
+    "N1": "C-Elysee",
+    "A0": "C4 Aircross",
+    "A5": "C3 Aircross",
+    "JA": "C4 Picasso I",
+    "JZ": "C4 SpaceTourer",
+    "UA": "C5 Aircross",
+    "AA": "Nemo"
+  },
+  "models": {
+    "Saxo": {
+      "years": [
+        1996,
+        2004
+      ],
+      "engines": [
+        "CDY",
+        "CDZ",
+        "HDZ",
+        "HFX",
+        "KFX",
+        "KFW",
+        "KDX",
+        "NFZ",
+        "NFX",
+        "NFS"
+      ]
+    },
+    "C2": {
+      "years": [
+        2003,
+        2009
+      ],
+      "engines": [
+        "KFU",
+        "KFX",
+        "KFW",
+        "NFU",
+        "NFS",
+        "8HX"
+      ]
+    },
+    "C3 I": {
+      "years": [
+        2002,
+        2009
+      ],
+      "engines": [
+        "KFU",
+        "KFX",
+        "KFW",
+        "NFU",
+        "8HX",
+        "8HZ",
+        "9HX",
+        "9HZ"
+      ]
+    },
+    "C3 II": {
+      "years": [
+        2009,
+        2016
+      ],
+      "engines": [
+        "ZMZ",
+        "HMP",
+        "HMY",
+        "HMU",
+        "HMH",
+        "HMG",
+        "HMZ",
+        "HMR",
+        "HNK",
+        "KFU",
+        "N18",
+        "8HX",
+        "9HP",
+        "9HD",
+        "BHW",
+        "BHY"
+      ]
+    },
+    "C3 III": {
+      "years": [
+        2016,
+        2025
+      ],
+      "engines": [
+        "HMG",
+        "HNK",
+        "HNZ",
+        "BHY"
+      ]
+    },
+    "Xsara": {
+      "years": [
+        1997,
+        2006
+      ],
+      "engines": [
+        "HDZ",
+        "HFX",
+        "KFX",
+        "KFW",
+        "NFZ",
+        "NFR",
+        "NFU",
+        "RFN",
+        "WJZ",
+        "WJY",
+        "RHY",
+        "RHZ"
+      ]
+    },
+    "Xsara Picasso": {
+      "years": [
+        1999,
+        2012
+      ],
+      "engines": [
+        "NFU",
+        "NFP",
+        "6FZ",
+        "RFN",
+        "WJZ",
+        "WJY",
+        "8HX",
+        "9HX",
+        "9HY",
+        "9HZ",
+        "RHY"
+      ]
+    },
+    "C4 I": {
+      "years": [
+        2004,
+        2010
+      ],
+      "engines": [
+        "KFU",
+        "NFU",
+        "N18",
+        "5FT",
+        "RFN",
+        "RFJ",
+        "8HX",
+        "9HX",
+        "9HY",
+        "9HZ",
+        "RHR"
+      ]
+    },
+    "C4 II": {
+      "years": [
+        2010,
+        2018
+      ],
+      "engines": [
+        "HMZ",
+        "HNK",
+        "HNZ",
+        "N18",
+        "5FA",
+        "5FV",
+        "9HR",
+        "9HD",
+        "9HP",
+        "BHY",
+        "BHZ",
+        "AH0"
+      ]
+    },
+    "C4 Cactus": {
+      "years": [
+        2014,
+        2020
+      ],
+      "engines": [
+        "HMZ",
+        "HNK",
+        "HNZ",
+        "BHW",
+        "BHY",
+        "BHZ"
+      ]
+    },
+    "C4 III": {
+      "years": [
+        2020,
+        2025
+      ],
+      "engines": [
+        "HNK",
+        "HNZ",
+        "HNN"
+      ]
+    },
+    "Xantia": {
+      "years": [
+        1993,
+        2001
+      ],
+      "engines": [
+        "NFZ",
+        "6FZ",
+        "RFN",
+        "3FZ",
+        "RHY",
+        "RHZ"
+      ]
+    },
+    "C5 I": {
+      "years": [
+        2001,
+        2004
+      ],
+      "engines": [
+        "NFU",
+        "6FZ",
+        "RFN",
+        "3FZ",
+        "3FY",
+        "RHY",
+        "RHZ",
+        "RHR",
+        "4HX"
+      ]
+    },
+    "C5 II": {
+      "years": [
+        2004,
+        2008
+      ],
+      "engines": [
+        "NFU",
+        "6FZ",
+        "RFN",
+        "RFJ",
+        "RFK",
+        "3FZ",
+        "3FY",
+        "9HY",
+        "9HZ",
+        "RHR",
+        "RHZ",
+        "4HX",
+        "4HN",
+        "4HT"
+      ]
+    },
+    "C5 III": {
+      "years": [
+        2008,
+        2017
+      ],
+      "engines": [
+        "N18",
+        "5FT",
+        "5FV",
+        "RFK",
+        "9HR",
+        "9HD",
+        "9HP",
+        "RHR",
+        "AH0",
+        "4HN",
+        "4HT",
+        "4HP",
+        "4HL"
+      ]
+    },
+    "Berlingo I": {
+      "years": [
+        1996,
+        2008
+      ],
+      "engines": [
+        "KFW",
+        "KFX",
+        "NFZ",
+        "NFR",
+        "NFU",
+        "8HT",
+        "8HX",
+        "WJZ",
+        "WJY",
+        "9HW",
+        "9HX"
+      ]
+    },
+    "Berlingo II": {
+      "years": [
+        2008,
+        2018
+      ],
+      "engines": [
+        "KFU",
+        "NFU",
+        "N18",
+        "HNK",
+        "8HX",
+        "9HX",
+        "9HV",
+        "9HZ",
+        "9HR",
+        "9HD",
+        "9HP",
+        "BHY",
+        "BHZ"
+      ]
+    },
+    "Berlingo III": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "HNK",
+        "HNZ",
+        "BHY",
+        "BHZ"
+      ]
+    },
+    "Jumpy I": {
+      "years": [
+        1995,
+        2006
+      ],
+      "engines": [
+        "NFZ",
+        "RFN",
+        "WJZ",
+        "WJY",
+        "RHY",
+        "RHZ"
+      ]
+    },
+    "Jumpy II": {
+      "years": [
+        2007,
+        2016
+      ],
+      "engines": [
+        "9HX",
+        "9HZ",
+        "9HR",
+        "9HD",
+        "RHR",
+        "RHZ",
+        "AH0",
+        "4HU"
+      ]
+    },
+    "Jumpy III": {
+      "years": [
+        2016,
+        2025
+      ],
+      "engines": [
+        "BHX",
+        "BHZ",
+        "AH0"
+      ]
+    },
+    "Jumper I": {
+      "years": [
+        1994,
+        2006
+      ],
+      "engines": [
+        "RHZ",
+        "RHR",
+        "4HV",
+        "4HW",
+        "4HX"
+      ]
+    },
+    "Jumper II": {
+      "years": [
+        2006,
+        2014
+      ],
+      "engines": [
+        "RHR",
+        "4HU",
+        "4HN",
+        "4HT",
+        "4HP"
+      ]
+    },
+    "Jumper III": {
+      "years": [
+        2014,
+        2025
+      ],
+      "engines": [
+        "AH0",
+        "4HU",
+        "4HN",
+        "4HT",
+        "4HP",
+        "4HL"
+      ]
+    },
+    "C8": {
+      "years": [
+        2002,
+        2014
+      ],
+      "engines": [
+        "RFN",
+        "RFJ",
+        "9HZ",
+        "RHR",
+        "AH0",
+        "4HX",
+        "4HN",
+        "4HT"
+      ]
+    },
+    "DS3": {
+      "years": [
+        2009,
+        2019
+      ],
+      "engines": [
+        "ZMZ",
+        "HMZ",
+        "HNK",
+        "HNZ",
+        "N18",
+        "5FT",
+        "5FX",
+        "5FV",
+        "5FY",
+        "5FD",
+        "5GZ",
+        "9HP",
+        "9HD",
+        "BHW",
+        "BHY",
+        "BHZ"
+      ]
+    },
+    "DS4": {
+      "years": [
+        2011,
+        2018
+      ],
+      "engines": [
+        "HNK",
+        "HNZ",
+        "N18",
+        "5FV",
+        "5FM",
+        "5GZ",
+        "9HR",
+        "9HD",
+        "9HP",
+        "BHY",
+        "BHZ",
+        "AH0"
+      ]
+    },
+    "DS5": {
+      "years": [
+        2011,
+        2018
+      ],
+      "engines": [
+        "N18",
+        "5FV",
+        "5FM",
+        "5GZ",
+        "9HR",
+        "9HD",
+        "BHY",
+        "BHZ",
+        "AH0"
+      ]
+    },
+    "C-Elysee": {
+      "years": [
+        2012,
+        2020
+      ],
+      "engines": [
+        "HMU",
+        "HMG",
+        "N18",
+        "9HP",
+        "9HD",
+        "BHY"
+      ]
+    },
+    "C4 Aircross": {
+      "years": [
+        2012,
+        2017
+      ],
+      "engines": [
+        "N18",
+        "9HD",
+        "AH0"
+      ]
+    },
+    "C3 Aircross": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "HMG",
+        "HNK",
+        "HNZ",
+        "BHY",
+        "BHZ"
+      ]
+    },
+    "C4 Picasso I": {
+      "years": [
+        2006,
+        2013
+      ],
+      "engines": [
+        "N18",
+        "5FT",
+        "5FV",
+        "RFJ",
+        "9HZ",
+        "9HR",
+        "9HD",
+        "9HP",
+        "RHR"
+      ]
+    },
+    "C4 SpaceTourer": {
+      "years": [
+        2013,
+        2022
+      ],
+      "engines": [
+        "HNK",
+        "HNZ",
+        "5FV",
+        "5GP",
+        "9HD",
+        "BHY",
+        "BHZ",
+        "AH0"
+      ]
+    },
+    "C5 Aircross": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "HNK",
+        "HNZ",
+        "5GP",
+        "BHY",
+        "BHZ",
+        "AH0"
+      ]
+    },
+    "Nemo": {
+      "years": [
+        2008,
+        2017
+      ],
+      "engines": [
+        "KFU",
+        "8HX",
+        "8HZ"
+      ]
+    }
+  },
+  "engines": {
+    "CDY": {
+      "desc": "1.0 TU9 45ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "CDZ": {
+      "desc": "1.0 TU9 50ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HDZ": {
+      "desc": "1.1 TU1 60ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HFX": {
+      "desc": "1.1 TU1 60ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "ZMZ": {
+      "desc": "1.0 VTi 68ch EB0",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HMP": {
+      "desc": "1.2 PureTech 68ch EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HMY": {
+      "desc": "1.2 VTi 72ch EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HMU": {
+      "desc": "1.2 VTi 75ch EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HMH": {
+      "desc": "1.2 PureTech 75ch S&S EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HMG": {
+      "desc": "1.2 PureTech 75ch S&S EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HMZ": {
+      "desc": "1.2 VTi 82ch EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HMR": {
+      "desc": "1.2 PureTech 83ch S&S EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HNK": {
+      "desc": "1.2 PureTech 100ch Turbo EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HNZ": {
+      "desc": "1.2 PureTech 110ch Turbo EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HNY": {
+      "desc": "1.2 PureTech 130ch Turbo EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "HNN": {
+      "desc": "1.2 PureTech 136ch Turbo EB2",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "KDX": {
+      "desc": "1.4 TU3 75ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "KFX": {
+      "desc": "1.4 TU3 75ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "KFW": {
+      "desc": "1.4 TU3 75ch",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "KFU": {
+      "desc": "1.4 ET3J4 16V 90ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "NFZ": {
+      "desc": "1.6 TU5 90ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "NFR": {
+      "desc": "1.6 TU5 16V 90ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "NFT": {
+      "desc": "1.6 TU5 100ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "NFW": {
+      "desc": "1.6 TU5 103ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "NFY": {
+      "desc": "1.6 TU5 105ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "NFU": {
+      "desc": "1.6 TU5 16V 110ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "NFP": {
+      "desc": "1.6 EC5 VVT 115ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "NFX": {
+      "desc": "1.6 TU5 16V 120ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "NFS": {
+      "desc": "1.6 TU5 16V 125ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "N18": {
+      "desc": "1.6 VTi 122ch EP6C",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5FA": {
+      "desc": "1.6 THP 125ch EP6CDTD",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5FT": {
+      "desc": "1.6 THP 150ch EP6DT",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5FX": {
+      "desc": "1.6 THP 150ch EP6DT",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5FV": {
+      "desc": "1.6 THP 156ch EP6CDT",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5FM": {
+      "desc": "1.6 THP 160ch EP6CDTM",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5FY": {
+      "desc": "1.6 THP 175ch EP6DTS",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5FD": {
+      "desc": "1.6 THP 175ch EP6DTS",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5GZ": {
+      "desc": "1.6 THP 200ch EP6FDT",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5FU": {
+      "desc": "1.6 THP 250ch EP6CDTX",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5GT": {
+      "desc": "1.6 THP 270ch EP6FDTX",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "5GP": {
+      "desc": "1.6 PureTech 180ch EP6FDTR",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "6FZ": {
+      "desc": "1.8 EW7 16V 117ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "RFR": {
+      "desc": "2.0 EW10 137ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "RFN": {
+      "desc": "2.0 EW10 16V 138ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "RFM": {
+      "desc": "2.0 EW10 138ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "RLZ": {
+      "desc": "2.0 EW10 140ch injection directe",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "RFJ": {
+      "desc": "2.0 EW10 16V 143ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "RFK": {
+      "desc": "2.0 EW10 16V 177ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "3FZ": {
+      "desc": "2.2 EW12 16V 158ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "3FY": {
+      "desc": "2.2 EW12 16V 163ch",
+      "fuel": "Essence",
+      "confidence": "high"
+    },
+    "8HT": {
+      "desc": "1.4 HDi 54ch DV4TD",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "8HX": {
+      "desc": "1.4 HDi 68ch DV4TD",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "8HZ": {
+      "desc": "1.4 HDi 92ch DV4TD",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "8HY": {
+      "desc": "1.4 HDi 92ch DV4TED4",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "WJZ": {
+      "desc": "1.9 D 68ch DW8",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "WJY": {
+      "desc": "1.9 D 71ch DW8",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HW": {
+      "desc": "1.6 HDi 75ch DV6BTED4",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HN": {
+      "desc": "1.6 HDi 75ch DV6ETED",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HV": {
+      "desc": "1.6 HDi 90ch DV6ATED4",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HX": {
+      "desc": "1.6 HDi 90ch DV6ATED4",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HF": {
+      "desc": "1.6 HDi 90ch DV6DTED",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HP": {
+      "desc": "1.6 e-HDi 92ch DV6DTED",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HY": {
+      "desc": "1.6 HDi 110ch DV6TED4",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HZ": {
+      "desc": "1.6 HDi 110ch DV6TED4",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HR": {
+      "desc": "1.6 HDi 112ch DV6CTED",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HD": {
+      "desc": "1.6 HDi 115ch DV6FCTED",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HL": {
+      "desc": "1.6 HDi 115ch DV6FCTED",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "9HG": {
+      "desc": "1.6 HDi 115ch DV6FCTED",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "BHW": {
+      "desc": "1.6 BlueHDi 75ch DV6FETED",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "BHV": {
+      "desc": "1.6 BlueHDi 99ch DV6TED4",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "BHY": {
+      "desc": "1.6 BlueHDi 99ch DV6TED4",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "BHX": {
+      "desc": "1.6 BlueHDi 115ch DV6FCTED",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "BHZ": {
+      "desc": "1.6 BlueHDi 120ch DV6FCTED",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "RHY": {
+      "desc": "2.0 HDi 90ch DW10TD",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "RHX": {
+      "desc": "2.0 HDi 94ch DW10",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "RHZ": {
+      "desc": "2.0 HDi 109ch DW10",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "RHR": {
+      "desc": "2.0 HDi 130ch DW10BTED4",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "RH0": {
+      "desc": "2.0 HDi 98ch DW10",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "AH0": {
+      "desc": "2.0 BlueHDi 136-180ch DW10",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "4HV": {
+      "desc": "2.2 HDi 104ch DW12",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "4HW": {
+      "desc": "2.2 HDi 128ch DW12",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "4HX": {
+      "desc": "2.2 HDi 136ch DW12",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "4HN": {
+      "desc": "2.2 HDi 156ch DW12",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "4HT": {
+      "desc": "2.2 HDi 170ch DW12",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "4HP": {
+      "desc": "2.2 HDi 170ch DW12",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "4HL": {
+      "desc": "2.2 HDi 204ch DW12",
+      "fuel": "Diesel",
+      "confidence": "high"
+    },
+    "4HU": {
+      "desc": "2.2 HDi 120-170ch DW12",
+      "fuel": "Diesel",
+      "confidence": "high"
+    }
+  }
+}

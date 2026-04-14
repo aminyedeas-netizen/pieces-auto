@@ -1,0 +1,238 @@
+{
+  "constructor": "Seat",
+  "wmi_codes": [
+    "VSS"
+  ],
+  "model_positions": [
+    6,
+    7
+  ],
+  "engine_positions": [
+    8
+  ],
+  "vin_models": {
+    "6J": "Ibiza IV",
+    "KJ": "Ibiza V",
+    "1P": "Leon II / Toledo III",
+    "5F": "Leon III",
+    "KL": "Leon IV",
+    "5P": "Altea",
+    "7N": "Alhambra II",
+    "KN": "Arona",
+    "KM": "Ateca",
+    "AA": "Mii",
+    "KP": "Tarraco",
+    "6L": "Ibiza III",
+    "1M": "Leon I / Toledo II",
+    "6K": "Cordoba II"
+  },
+  "models": {
+    "Ibiza III": {
+      "years": [
+        2002,
+        2008
+      ],
+      "engines": [
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    },
+    "Ibiza IV": {
+      "years": [
+        2008,
+        2017
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    },
+    "Ibiza V": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B",
+        "F"
+      ]
+    },
+    "Leon I / Toledo II": {
+      "years": [
+        1999,
+        2005
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Leon II / Toledo III": {
+      "years": [
+        2005,
+        2012
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Leon III": {
+      "years": [
+        2012,
+        2020
+      ],
+      "engines": [
+        "A",
+        "B",
+        "D",
+        "F",
+        "G",
+        "H"
+      ]
+    },
+    "Leon IV": {
+      "years": [
+        2020,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "G",
+        "H"
+      ]
+    },
+    "Altea": {
+      "years": [
+        2004,
+        2015
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Alhambra II": {
+      "years": [
+        2010,
+        2022
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Arona": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B",
+        "F"
+      ]
+    },
+    "Ateca": {
+      "years": [
+        2016,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Mii": {
+      "years": [
+        2011,
+        2021
+      ],
+      "engines": [
+        "A"
+      ]
+    },
+    "Tarraco": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Cordoba II": {
+      "years": [
+        2002,
+        2009
+      ],
+      "engines": [
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    }
+  },
+  "engines": {
+    "A": {
+      "desc": "1.0 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "B": {
+      "desc": "1.2/1.4 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "C": {
+      "desc": "1.6 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "D": {
+      "desc": "2.0 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "E": {
+      "desc": "1.4 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "F": {
+      "desc": "1.6 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "G": {
+      "desc": "2.0 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "H": {
+      "desc": "1.5 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    }
+  }
+}

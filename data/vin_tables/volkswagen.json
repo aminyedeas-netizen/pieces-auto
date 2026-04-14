@@ -1,0 +1,470 @@
+{
+  "constructor": "Volkswagen",
+  "wmi_codes": [
+    "WVW"
+  ],
+  "model_positions": [
+    6,
+    7
+  ],
+  "engine_positions": [
+    8
+  ],
+  "vin_models": {
+    "6R": "Polo V",
+    "AW": "Polo VI",
+    "1J": "Golf IV / Bora",
+    "1K": "Golf V / Jetta III",
+    "5K": "Golf VI",
+    "AU": "Golf VII",
+    "CD": "Golf VIII",
+    "3C": "Passat B6 / B7",
+    "3G": "Passat B8",
+    "5N": "Tiguan I",
+    "AD": "Tiguan II",
+    "1T": "Touran I / II",
+    "5T": "Touran III",
+    "2K": "Caddy IV / V",
+    "7H": "Transporter T5",
+    "SG": "Transporter T6",
+    "SH": "Transporter T6.1",
+    "A1": "T-Roc",
+    "C1": "T-Cross",
+    "3H": "Arteon",
+    "AA": "Up!",
+    "7L": "Touareg I",
+    "7P": "Touareg II",
+    "CR": "Touareg III",
+    "16": "Jetta V",
+    "AJ": "Jetta VI",
+    "13": "Scirocco III",
+    "7N": "Sharan II",
+    "9N": "Polo IV",
+    "6N": "Polo III",
+    "3B": "Passat B5"
+  },
+  "models": {
+    "Polo III": {
+      "years": [
+        1994,
+        2001
+      ],
+      "engines": [
+        "B",
+        "C",
+        "E",
+        "S"
+      ]
+    },
+    "Polo IV": {
+      "years": [
+        2001,
+        2009
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "E",
+        "F",
+        "S"
+      ]
+    },
+    "Polo V": {
+      "years": [
+        2009,
+        2017
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    },
+    "Polo VI": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B",
+        "E",
+        "F"
+      ]
+    },
+    "Golf IV / Bora": {
+      "years": [
+        1997,
+        2003
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G"
+      ]
+    },
+    "Golf V / Jetta III": {
+      "years": [
+        2003,
+        2008
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G"
+      ]
+    },
+    "Golf VI": {
+      "years": [
+        2008,
+        2012
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Golf VII": {
+      "years": [
+        2012,
+        2019
+      ],
+      "engines": [
+        "A",
+        "B",
+        "D",
+        "F",
+        "G",
+        "H"
+      ]
+    },
+    "Golf VIII": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B",
+        "D",
+        "F",
+        "G",
+        "H"
+      ]
+    },
+    "Passat B5": {
+      "years": [
+        1996,
+        2005
+      ],
+      "engines": [
+        "C",
+        "D",
+        "G",
+        "N"
+      ]
+    },
+    "Passat B6 / B7": {
+      "years": [
+        2005,
+        2014
+      ],
+      "engines": [
+        "C",
+        "D",
+        "G",
+        "L",
+        "N"
+      ]
+    },
+    "Passat B8": {
+      "years": [
+        2014,
+        2025
+      ],
+      "engines": [
+        "D",
+        "G",
+        "H"
+      ]
+    },
+    "Tiguan I": {
+      "years": [
+        2007,
+        2016
+      ],
+      "engines": [
+        "B",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Tiguan II": {
+      "years": [
+        2016,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "G",
+        "H"
+      ]
+    },
+    "Touran I / II": {
+      "years": [
+        2003,
+        2015
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Touran III": {
+      "years": [
+        2015,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "G"
+      ]
+    },
+    "Caddy IV / V": {
+      "years": [
+        2015,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Transporter T5": {
+      "years": [
+        2003,
+        2015
+      ],
+      "engines": [
+        "D",
+        "G",
+        "N"
+      ]
+    },
+    "Transporter T6": {
+      "years": [
+        2015,
+        2019
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Transporter T6.1": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "T-Roc": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D",
+        "G"
+      ]
+    },
+    "T-Cross": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "A",
+        "D"
+      ]
+    },
+    "Arteon": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Up!": {
+      "years": [
+        2011,
+        2023
+      ],
+      "engines": [
+        "A"
+      ]
+    },
+    "Touareg I": {
+      "years": [
+        2002,
+        2010
+      ],
+      "engines": [
+        "G",
+        "N"
+      ]
+    },
+    "Touareg II": {
+      "years": [
+        2010,
+        2018
+      ],
+      "engines": [
+        "D",
+        "G",
+        "N"
+      ]
+    },
+    "Touareg III": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "G"
+      ]
+    },
+    "Jetta V": {
+      "years": [
+        2005,
+        2010
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Jetta VI": {
+      "years": [
+        2010,
+        2018
+      ],
+      "engines": [
+        "B",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Scirocco III": {
+      "years": [
+        2008,
+        2017
+      ],
+      "engines": [
+        "B",
+        "D",
+        "G"
+      ]
+    },
+    "Sharan II": {
+      "years": [
+        2010,
+        2022
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    }
+  },
+  "engines": {
+    "A": {
+      "desc": "1.0 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "B": {
+      "desc": "1.2/1.4 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "C": {
+      "desc": "1.6 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "D": {
+      "desc": "2.0 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "E": {
+      "desc": "1.4 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "F": {
+      "desc": "1.6 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "G": {
+      "desc": "2.0 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "H": {
+      "desc": "1.5 TSI Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "L": {
+      "desc": "2.2 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "N": {
+      "desc": "2.5 / 3.0 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "S": {
+      "desc": "1.4 TDI Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    }
+  }
+}

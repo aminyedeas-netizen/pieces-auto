@@ -1,0 +1,331 @@
+{
+  "constructor": "Toyota",
+  "wmi_codes": [
+    "SB1",
+    "JTD"
+  ],
+  "model_positions": [
+    3,
+    4
+  ],
+  "engine_positions": [
+    6
+  ],
+  "vin_models": {
+    "P1": "Yaris I",
+    "P9": "Yaris II",
+    "PJ": "Yaris III",
+    "PA": "Yaris IV",
+    "E1": "Corolla X (E140)",
+    "ZR": "Auris II",
+    "ZW": "Corolla XII (E210)",
+    "ZE": "Corolla / Auris",
+    "T2": "Avensis III",
+    "A3": "RAV4 III",
+    "A4": "RAV4 IV",
+    "A5": "RAV4 V",
+    "J1": "Land Cruiser 150",
+    "J2": "Land Cruiser 200",
+    "N2": "Hilux VII",
+    "N3": "Hilux VIII",
+    "X1": "C-HR",
+    "B0": "Aygo I",
+    "G3": "Camry XV70",
+    "ZZ": "Corolla / Auris"
+  },
+  "models": {
+    "Yaris I": {
+      "years": [
+        1999,
+        2005
+      ],
+      "engines": [
+        "A",
+        "B",
+        "D"
+      ]
+    },
+    "Yaris II": {
+      "years": [
+        2005,
+        2011
+      ],
+      "engines": [
+        "A",
+        "B",
+        "D"
+      ]
+    },
+    "Yaris III": {
+      "years": [
+        2011,
+        2020
+      ],
+      "engines": [
+        "A",
+        "B",
+        "D",
+        "H"
+      ]
+    },
+    "Yaris IV": {
+      "years": [
+        2020,
+        2025
+      ],
+      "engines": [
+        "A",
+        "H"
+      ]
+    },
+    "Corolla IX (E120)": {
+      "years": [
+        2001,
+        2006
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "Corolla X (E140)": {
+      "years": [
+        2006,
+        2012
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "Corolla XI (E170)": {
+      "years": [
+        2013,
+        2019
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "Corolla XII": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "B",
+        "C",
+        "H"
+      ]
+    },
+    "Corolla XII (E210)": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "B",
+        "C",
+        "H"
+      ]
+    },
+    "Corolla / Auris": {
+      "years": [
+        2006,
+        2018
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "H"
+      ]
+    },
+    "Auris I": {
+      "years": [
+        2006,
+        2012
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "H"
+      ]
+    },
+    "Auris II": {
+      "years": [
+        2012,
+        2018
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "H"
+      ]
+    },
+    "Avensis II": {
+      "years": [
+        2003,
+        2008
+      ],
+      "engines": [
+        "C",
+        "D",
+        "E"
+      ]
+    },
+    "Avensis III": {
+      "years": [
+        2009,
+        2018
+      ],
+      "engines": [
+        "C",
+        "D",
+        "E"
+      ]
+    },
+    "RAV4 III": {
+      "years": [
+        2005,
+        2012
+      ],
+      "engines": [
+        "C",
+        "D",
+        "E"
+      ]
+    },
+    "RAV4 IV": {
+      "years": [
+        2013,
+        2018
+      ],
+      "engines": [
+        "C",
+        "D",
+        "E"
+      ]
+    },
+    "RAV4 V": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "C",
+        "H"
+      ]
+    },
+    "Land Cruiser 150": {
+      "years": [
+        2009,
+        2025
+      ],
+      "engines": [
+        "E",
+        "F"
+      ]
+    },
+    "Land Cruiser 200": {
+      "years": [
+        2007,
+        2021
+      ],
+      "engines": [
+        "F"
+      ]
+    },
+    "Hilux VII": {
+      "years": [
+        2005,
+        2015
+      ],
+      "engines": [
+        "E"
+      ]
+    },
+    "Hilux VIII": {
+      "years": [
+        2015,
+        2025
+      ],
+      "engines": [
+        "E"
+      ]
+    },
+    "C-HR": {
+      "years": [
+        2016,
+        2025
+      ],
+      "engines": [
+        "B",
+        "C",
+        "H"
+      ]
+    },
+    "Aygo I": {
+      "years": [
+        2005,
+        2014
+      ],
+      "engines": [
+        "A"
+      ]
+    },
+    "Camry XV70": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "C",
+        "H"
+      ]
+    }
+  },
+  "engines": {
+    "A": {
+      "desc": "1.0 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "B": {
+      "desc": "1.2/1.3 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "C": {
+      "desc": "1.6/1.8 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "D": {
+      "desc": "1.4 D-4D Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "E": {
+      "desc": "2.0/2.2 D-4D Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "F": {
+      "desc": "2.8/3.0 D-4D Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "H": {
+      "desc": "Hybride Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    }
+  }
+}

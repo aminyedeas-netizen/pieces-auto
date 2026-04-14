@@ -1,0 +1,429 @@
+{
+  "constructor": "Kia",
+  "wmi_codes": [
+    "KNA",
+    "KND"
+  ],
+  "model_positions": [
+    3,
+    4
+  ],
+  "engine_positions": [
+    7
+  ],
+  "vin_models": {
+    "TA": "Picanto I",
+    "TB": "Picanto II",
+    "TI": "Picanto III",
+    "DC": "Rio II",
+    "DE": "Rio III",
+    "YB": "Rio IV",
+    "ED": "Ceed I",
+    "JD": "Ceed II",
+    "CD": "Ceed III",
+    "TD": "Cerato / Forte II",
+    "YD": "Cerato / Forte III",
+    "SL": "Sportage III",
+    "QL": "Sportage IV",
+    "NQ": "Sportage V",
+    "XM": "Sorento II",
+    "UM": "Sorento III",
+    "MQ": "Sorento IV",
+    "YN": "Venga",
+    "AM": "Soul I",
+    "PS": "Soul II",
+    "TF": "Optima / K5 III",
+    "JF": "Optima / K5 IV",
+    "DL": "K5 V",
+    "UN": "Carens III",
+    "RP": "Carens IV",
+    "VQ": "Carnival III",
+    "KA": "Carnival IV",
+    "BD": "Stonic",
+    "CG": "XCeed",
+    "SG": "Niro",
+    "CV": "Seltos"
+  },
+  "models": {
+    "Picanto I": {
+      "years": [
+        2004,
+        2011
+      ],
+      "engines": [
+        "A",
+        "B"
+      ]
+    },
+    "Picanto II": {
+      "years": [
+        2011,
+        2017
+      ],
+      "engines": [
+        "A",
+        "B"
+      ]
+    },
+    "Picanto III": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B"
+      ]
+    },
+    "Rio II": {
+      "years": [
+        2005,
+        2011
+      ],
+      "engines": [
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    },
+    "Rio III": {
+      "years": [
+        2011,
+        2017
+      ],
+      "engines": [
+        "B",
+        "C",
+        "E",
+        "F"
+      ]
+    },
+    "Rio IV": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "F"
+      ]
+    },
+    "Ceed I": {
+      "years": [
+        2006,
+        2012
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Ceed II": {
+      "years": [
+        2012,
+        2018
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Ceed III": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Cerato / Forte II": {
+      "years": [
+        2009,
+        2013
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F"
+      ]
+    },
+    "Cerato / Forte III": {
+      "years": [
+        2013,
+        2018
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F"
+      ]
+    },
+    "Sportage III": {
+      "years": [
+        2010,
+        2015
+      ],
+      "engines": [
+        "C",
+        "D",
+        "G"
+      ]
+    },
+    "Sportage IV": {
+      "years": [
+        2016,
+        2021
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Sportage V": {
+      "years": [
+        2021,
+        2025
+      ],
+      "engines": [
+        "C",
+        "D",
+        "G",
+        "H"
+      ]
+    },
+    "Sorento II": {
+      "years": [
+        2009,
+        2014
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Sorento III": {
+      "years": [
+        2015,
+        2020
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Sorento IV": {
+      "years": [
+        2020,
+        2025
+      ],
+      "engines": [
+        "D",
+        "G",
+        "H"
+      ]
+    },
+    "Venga": {
+      "years": [
+        2010,
+        2019
+      ],
+      "engines": [
+        "B",
+        "C",
+        "F"
+      ]
+    },
+    "Soul I": {
+      "years": [
+        2009,
+        2013
+      ],
+      "engines": [
+        "C",
+        "F"
+      ]
+    },
+    "Soul II": {
+      "years": [
+        2014,
+        2019
+      ],
+      "engines": [
+        "C",
+        "F"
+      ]
+    },
+    "Optima / K5 III": {
+      "years": [
+        2010,
+        2015
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "Optima / K5 IV": {
+      "years": [
+        2016,
+        2020
+      ],
+      "engines": [
+        "D",
+        "G"
+      ]
+    },
+    "K5 V": {
+      "years": [
+        2020,
+        2025
+      ],
+      "engines": [
+        "D",
+        "H"
+      ]
+    },
+    "Carens III": {
+      "years": [
+        2006,
+        2012
+      ],
+      "engines": [
+        "C",
+        "D",
+        "G"
+      ]
+    },
+    "Carens IV": {
+      "years": [
+        2013,
+        2019
+      ],
+      "engines": [
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Carnival III": {
+      "years": [
+        2006,
+        2014
+      ],
+      "engines": [
+        "G"
+      ]
+    },
+    "Carnival IV": {
+      "years": [
+        2014,
+        2025
+      ],
+      "engines": [
+        "G"
+      ]
+    },
+    "Stonic": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "A",
+        "B",
+        "C",
+        "F"
+      ]
+    },
+    "XCeed": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "F",
+        "G"
+      ]
+    },
+    "Niro": {
+      "years": [
+        2016,
+        2025
+      ],
+      "engines": [
+        "H"
+      ]
+    },
+    "Seltos": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "B",
+        "C",
+        "F"
+      ]
+    }
+  },
+  "engines": {
+    "A": {
+      "desc": "1.0 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "B": {
+      "desc": "1.2 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "C": {
+      "desc": "1.6 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "D": {
+      "desc": "2.0 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "E": {
+      "desc": "1.1 CRDi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "F": {
+      "desc": "1.6 CRDi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "G": {
+      "desc": "2.0 CRDi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "H": {
+      "desc": "1.6 T-GDI / Hybride Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    }
+  }
+}

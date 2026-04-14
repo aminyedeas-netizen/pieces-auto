@@ -1,0 +1,596 @@
+{
+  "constructor": "Renault",
+  "wmi_codes": [
+    "VF1",
+    "VF2"
+  ],
+  "model_positions": [
+    3,
+    4
+  ],
+  "engine_positions": [
+    6
+  ],
+  "vin_models": {
+    "BB": "Clio II",
+    "BR": "Clio III",
+    "RS": "Clio III",
+    "5R": "Clio IV",
+    "BF": "Clio V",
+    "BM": "Megane II",
+    "KM": "Megane III",
+    "RM": "Megane III",
+    "RF": "Megane IV",
+    "JM": "Scenic II",
+    "JZ": "Scenic III",
+    "RK": "Scenic IV",
+    "FC": "Kangoo I",
+    "FW": "Kangoo II",
+    "FK": "Kangoo III",
+    "BG": "Laguna II",
+    "BT": "Laguna III",
+    "LZ": "Fluence",
+    "L8": "Symbol / Thalia",
+    "J5": "Captur I",
+    "JB": "Captur II",
+    "HF": "Kadjar",
+    "HJ": "Koleos II",
+    "JD": "Master II",
+    "MA": "Master III",
+    "FL": "Trafic II",
+    "FG": "Trafic III",
+    "CN": "Twingo I",
+    "CT": "Twingo II",
+    "AH": "Twingo III",
+    "BS": "Sandero I",
+    "SD": "Sandero II",
+    "HS": "Duster I",
+    "HM": "Duster II",
+    "LS": "Logan I",
+    "L5": "Logan II",
+    "LT": "Latitude",
+    "JK": "Espace V",
+    "RJ": "Talisman",
+    "RH": "Arkana",
+    "L7": "Logan (Renault)"
+  },
+  "models": {
+    "Clio II": {
+      "years": [
+        1998,
+        2012
+      ],
+      "engines": [
+        "P",
+        "B",
+        "C",
+        "D",
+        "K"
+      ]
+    },
+    "Clio III": {
+      "years": [
+        2005,
+        2014
+      ],
+      "engines": [
+        "P",
+        "B",
+        "C",
+        "D",
+        "K",
+        "F"
+      ]
+    },
+    "Clio IV": {
+      "years": [
+        2012,
+        2019
+      ],
+      "engines": [
+        "H",
+        "N",
+        "F",
+        "D",
+        "K"
+      ]
+    },
+    "Clio V": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "H",
+        "N",
+        "G",
+        "D"
+      ]
+    },
+    "Megane II": {
+      "years": [
+        2002,
+        2009
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "K",
+        "A",
+        "E"
+      ]
+    },
+    "Megane III": {
+      "years": [
+        2008,
+        2016
+      ],
+      "engines": [
+        "C",
+        "F",
+        "D",
+        "K",
+        "A",
+        "E",
+        "L"
+      ]
+    },
+    "Megane IV": {
+      "years": [
+        2016,
+        2025
+      ],
+      "engines": [
+        "F",
+        "G",
+        "D",
+        "K",
+        "L",
+        "M"
+      ]
+    },
+    "Scenic II": {
+      "years": [
+        2003,
+        2009
+      ],
+      "engines": [
+        "B",
+        "C",
+        "D",
+        "K",
+        "E"
+      ]
+    },
+    "Scenic III": {
+      "years": [
+        2009,
+        2016
+      ],
+      "engines": [
+        "C",
+        "F",
+        "D",
+        "K",
+        "E"
+      ]
+    },
+    "Scenic IV": {
+      "years": [
+        2016,
+        2022
+      ],
+      "engines": [
+        "F",
+        "G",
+        "D",
+        "K"
+      ]
+    },
+    "Kangoo I": {
+      "years": [
+        1997,
+        2007
+      ],
+      "engines": [
+        "P",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "Kangoo II": {
+      "years": [
+        2008,
+        2021
+      ],
+      "engines": [
+        "C",
+        "F",
+        "D",
+        "K"
+      ]
+    },
+    "Kangoo III": {
+      "years": [
+        2021,
+        2025
+      ],
+      "engines": [
+        "G",
+        "D"
+      ]
+    },
+    "Laguna II": {
+      "years": [
+        2001,
+        2007
+      ],
+      "engines": [
+        "C",
+        "D",
+        "A",
+        "E",
+        "L"
+      ]
+    },
+    "Laguna III": {
+      "years": [
+        2007,
+        2015
+      ],
+      "engines": [
+        "C",
+        "F",
+        "D",
+        "A",
+        "E",
+        "L"
+      ]
+    },
+    "Fluence": {
+      "years": [
+        2009,
+        2017
+      ],
+      "engines": [
+        "C",
+        "D",
+        "K"
+      ]
+    },
+    "Symbol / Thalia": {
+      "years": [
+        2008,
+        2013
+      ],
+      "engines": [
+        "P",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "Captur I": {
+      "years": [
+        2013,
+        2019
+      ],
+      "engines": [
+        "H",
+        "F",
+        "D",
+        "K"
+      ]
+    },
+    "Captur II": {
+      "years": [
+        2019,
+        2025
+      ],
+      "engines": [
+        "N",
+        "G",
+        "D"
+      ]
+    },
+    "Kadjar": {
+      "years": [
+        2015,
+        2022
+      ],
+      "engines": [
+        "F",
+        "G",
+        "D",
+        "K"
+      ]
+    },
+    "Koleos II": {
+      "years": [
+        2017,
+        2025
+      ],
+      "engines": [
+        "G",
+        "D"
+      ]
+    },
+    "Master II": {
+      "years": [
+        1998,
+        2010
+      ],
+      "engines": [
+        "E",
+        "R"
+      ]
+    },
+    "Master III": {
+      "years": [
+        2010,
+        2025
+      ],
+      "engines": [
+        "E",
+        "R"
+      ]
+    },
+    "Trafic II": {
+      "years": [
+        2001,
+        2014
+      ],
+      "engines": [
+        "D",
+        "E"
+      ]
+    },
+    "Trafic III": {
+      "years": [
+        2014,
+        2025
+      ],
+      "engines": [
+        "D",
+        "E"
+      ]
+    },
+    "Twingo I": {
+      "years": [
+        1993,
+        2007
+      ],
+      "engines": [
+        "P",
+        "B",
+        "C"
+      ]
+    },
+    "Twingo II": {
+      "years": [
+        2007,
+        2014
+      ],
+      "engines": [
+        "P",
+        "D"
+      ]
+    },
+    "Twingo III": {
+      "years": [
+        2014,
+        2024
+      ],
+      "engines": [
+        "H",
+        "N"
+      ]
+    },
+    "Sandero I": {
+      "years": [
+        2008,
+        2012
+      ],
+      "engines": [
+        "P",
+        "C",
+        "D"
+      ]
+    },
+    "Sandero II": {
+      "years": [
+        2012,
+        2020
+      ],
+      "engines": [
+        "H",
+        "N",
+        "F",
+        "D",
+        "K"
+      ]
+    },
+    "Duster I": {
+      "years": [
+        2010,
+        2017
+      ],
+      "engines": [
+        "C",
+        "F",
+        "D",
+        "K"
+      ]
+    },
+    "Duster II": {
+      "years": [
+        2018,
+        2025
+      ],
+      "engines": [
+        "F",
+        "G",
+        "D",
+        "K"
+      ]
+    },
+    "Logan I": {
+      "years": [
+        2004,
+        2012
+      ],
+      "engines": [
+        "P",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "Logan II": {
+      "years": [
+        2012,
+        2020
+      ],
+      "engines": [
+        "H",
+        "N",
+        "F",
+        "D",
+        "K"
+      ]
+    },
+    "Logan (Renault)": {
+      "years": [
+        2004,
+        2020
+      ],
+      "engines": [
+        "P",
+        "B",
+        "C",
+        "D",
+        "K"
+      ]
+    },
+    "Latitude": {
+      "years": [
+        2010,
+        2015
+      ],
+      "engines": [
+        "C",
+        "D",
+        "E"
+      ]
+    },
+    "Espace V": {
+      "years": [
+        2015,
+        2023
+      ],
+      "engines": [
+        "F",
+        "G",
+        "D",
+        "E"
+      ]
+    },
+    "Talisman": {
+      "years": [
+        2015,
+        2022
+      ],
+      "engines": [
+        "F",
+        "G",
+        "D",
+        "E",
+        "L"
+      ]
+    },
+    "Arkana": {
+      "years": [
+        2021,
+        2025
+      ],
+      "engines": [
+        "G",
+        "D"
+      ]
+    }
+  },
+  "engines": {
+    "H": {
+      "desc": "1.0 SCe Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "N": {
+      "desc": "1.0 TCe Turbo Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "P": {
+      "desc": "1.2 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "B": {
+      "desc": "1.4 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "C": {
+      "desc": "1.6 Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "F": {
+      "desc": "1.2 TCe Turbo Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "G": {
+      "desc": "1.3 TCe Turbo Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "L": {
+      "desc": "1.8 TCe Turbo Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "M": {
+      "desc": "2.0 TCe Turbo Essence",
+      "fuel": "Essence",
+      "confidence": "medium"
+    },
+    "D": {
+      "desc": "1.5 dCi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "K": {
+      "desc": "1.5 dCi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "A": {
+      "desc": "1.6 dCi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "E": {
+      "desc": "2.0 dCi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    },
+    "R": {
+      "desc": "2.3 dCi Diesel",
+      "fuel": "Diesel",
+      "confidence": "medium"
+    }
+  }
+}

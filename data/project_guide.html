@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pieces Auto TN — Project Guide</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+         max-width: 760px; margin: 40px auto; padding: 0 24px;
+         color: #1e1e1e; line-height: 1.55; font-size: 14px; }
+  h1 { color: #0b4f8a; margin-bottom: 4px; }
+  h2 { color: #0b4f8a; border-bottom: 2px solid #dde; padding-bottom: 4px;
+       margin-top: 28px; }
+  h3 { color: #234; margin-bottom: 6px; }
+  code, pre { font-family: "SF Mono", Menlo, monospace; font-size: 12.5px; }
+  pre { background: #f4f6fa; padding: 10px 14px; border-radius: 6px;
+        overflow-x: auto; border: 1px solid #e0e4ec; }
+  code { background: #f0f2f7; padding: 1px 5px; border-radius: 3px; }
+  .sub { color: #667; margin-top: 0; }
+  .box { background: #eef5ff; border-left: 4px solid #0b4f8a;
+         padding: 10px 14px; margin: 12px 0; border-radius: 4px; }
+  ul { padding-left: 22px; }
+  li { margin: 4px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #e0e4ec; }
+  th { background: #f4f6fa; }
+</style>
+</head>
+<body>
+
+<h1>Pieces Auto TN</h1>
+<p class="sub">A quick friend-to-friend tour of what the project does and how to run it.</p>
+
+<h2>What it is</h2>
+<p>
+  Pieces Auto TN is an auto-parts search system for Tunisia, running entirely
+  through <b>two Telegram bots</b>. Customers find parts for their car; a
+  mechanic/operator feeds the database from the official catalog. No website,
+  no app — just chat.
+</p>
+<div class="box">
+  Think of it as a chat-native version of a parts counter: the client types
+  "Kia Picanto filtre a huile", the bot figures out which exact car they mean,
+  looks up valid references in our database, and checks live prices/stock
+  from the wholesaler.
+</div>
+
+<h2>The two bots</h2>
+
+<h3>1. Client bot — for customers</h3>
+<ul>
+  <li>Three ways to identify the car: photo of <i>carte grise</i>, VIN entry,
+      or pick brand &gt; model &gt; year &gt; engine with buttons.</li>
+  <li>Free text also works: "Peugeot 208 2019 courroie" or
+      "quit de distribusion polo" (supports French, Arabic, and Tunisian
+      franco-arabic spellings).</li>
+  <li>Returns the part references that fit, and — for the ones CDG carries —
+      live price and stock.</li>
+</ul>
+
+<h3>2. Operator bot — for the mechanic / data-entry person</h3>
+<ul>
+  <li><code>/ajouter_ref</code> — send screenshots from PiecesAuto24 and the
+      bot extracts vehicle + part + references automatically (LLM vision).</li>
+  <li><code>/vin</code> — decode a VIN and map it to the right vehicle in DB.</li>
+  <li><code>/ref</code> — consult the database (brand &gt; model &gt; year &gt;
+      engine &gt; part, buttons only).</li>
+  <li><code>/dispo</code> — live CDG availability + price check.</li>
+  <li><code>/stats</code>, <code>/guide</code> — self-explanatory.</li>
+</ul>
+
+<h2>How the pieces fit together</h2>
+<pre>
+Customer (Telegram)                          Operator (Telegram)
+        │                                            │
+        ▼                                            ▼
+   client_bot.py ◄──── src/chain.py ────► operator_bot.py
+                               │
+                 ┌─────────────┼──────────────┐
+                 ▼             ▼              ▼
+           PostgreSQL    OpenRouter LLM    Playwright
+           (Supabase)    (Gemini/Claude)   scraper
+                                            │
+                                            ▼
+                                        CDG wholesaler
+</pre>
+
+<h2>The ground rules (read these first)</h2>
+<ul>
+  <li><b>PiecesAuto24</b> is the single source of truth for vehicle naming and
+      part references.</li>
+  <li><b>CDG</b> is the single source of truth for live price and stock
+      (never cached — always scraped live).</li>
+  <li>The <b>LLM never guesses part references</b>. References only come from
+      the database. The LLM only helps with text interpretation and OCR.</li>
+  <li><b>Zero free text for vehicle identification in the operator bot</b>:
+      always buttons sourced from the DB.</li>
+</ul>
+
+<h2>Tech stack</h2>
+<table>
+  <tr><th>Layer</th><th>What's used</th></tr>
+  <tr><td>Language</td><td>Python 3.12</td></tr>
+  <tr><td>Package manager</td><td><code>uv</code> (always <code>uv run</code>,
+       <code>uv add</code> — never pip / python3 directly)</td></tr>
+  <tr><td>Telegram</td><td><code>python-telegram-bot</code> (latest)</td></tr>
+  <tr><td>LLM</td><td>OpenRouter — Gemini 2.0 Flash for vision,
+       Claude Haiku 4.5 for text</td></tr>
+  <tr><td>Scraper</td><td>Playwright (headless) for CDG</td></tr>
+  <tr><td>Database</td><td>PostgreSQL on Supabase (6 tables)</td></tr>
+</table>
+
+<h2>Database in one glance (6 tables)</h2>
+<ul>
+  <li><code>vehicles</code> — exact names from PiecesAuto24
+      (<code>pa24_full_name</code>).</li>
+  <li><code>vin_patterns</code> — first 13 chars of a VIN → vehicle_id.</li>
+  <li><code>part_references</code> — vehicle + part + brand + reference.</li>
+  <li><code>part_vehicle_compatibility</code> — cross-reference compatible vehicles.</li>
+  <li><code>screenshots</code> — local screenshot storage metadata.</li>
+  <li><code>requests_log</code> — client request audit trail.</li>
+</ul>
+
+<h2>First-run setup</h2>
+<pre>
+# 1. Install deps
+uv sync
+
+# 2. Copy .env.example → .env and fill in:
+#    TELEGRAM_OPERATOR_BOT_TOKEN, TELEGRAM_CLIENT_BOT_TOKEN
+#    OPENROUTER_API_KEY
+#    CDG_URL, CDG_LOGIN, CDG_PASSWORD
+#    DATABASE_URL   (Supabase Postgres)
+
+# 3. Initialize the DB schema
+uv run python3 -m src init-db
+
+# 4. Seed from data/database.json (275+ vehicles, ~80k references)
+uv run python3 -m src seed
+
+# 5. Run both bots
+uv run python3 -m src serve
+</pre>
+<div class="box">
+  <code>serve</code> auto-re-seeds on startup, so step 4 is optional after
+  first run. Seed is idempotent — it only updates, never duplicates.
+</div>
+
+<h2>Where to look in the code</h2>
+<table>
+  <tr><th>Path</th><th>Role</th></tr>
+  <tr><td><code>src/telegram/client_bot.py</code></td>
+      <td>Customer-facing flows (photo / VIN / model pickers, text parsing)</td></tr>
+  <tr><td><code>src/telegram/operator_bot.py</code></td>
+      <td>/ajouter_ref, /vin, /ref, /dispo, /stats flows</td></tr>
+  <tr><td><code>src/telegram/ui.py</code></td>
+      <td>Button layout / display formatters (display ↔ DB contract)</td></tr>
+  <tr><td><code>src/db/repository.py</code></td>
+      <td>All DB queries. Uses a shared asyncpg pool.</td></tr>
+  <tr><td><code>src/db/seed.py</code></td>
+      <td>Loads <code>data/database.json</code> into Supabase.</td></tr>
+  <tr><td><code>src/chain.py</code></td>
+      <td>Glue: DB lookup → CDG scrape → formatted reply.</td></tr>
+  <tr><td><code>src/scraper/cdg.py</code></td>
+      <td>Playwright CDG login + search + equivalents expansion.</td></tr>
+  <tr><td><code>src/interpreter/llm.py</code></td>
+      <td>OpenRouter wrapper + <code>parse_vehicle_query()</code> shared parser.</td></tr>
+  <tr><td><code>src/vin/decoder.py</code></td>
+      <td>VIN decoding (WMI table + PSA engine-code DB lookup).</td></tr>
+  <tr><td><code>docs/ui_display_contract.md</code></td>
+      <td>Rules for picker UIs — read before adding a new one.</td></tr>
+</table>
+
+<h2>Important mental model</h2>
+<ul>
+  <li><b>Display vs DB</b>: buttons are cleaned up for humans, but callbacks
+      carry an <i>index</i> into a session-cached raw list. The DB always sees
+      the unmodified original string.
+      See <code>docs/ui_display_contract.md</code>.</li>
+  <li><b>Sessions are in-memory</b>: bot restart loses them. Acceptable for now.</li>
+  <li><b>Prices are never cached</b>. Every <code>/dispo</code> is a live
+      Playwright scrape. An asyncio lock serializes scraper calls across both bots.</li>
+  <li><b>Be simple, work incrementally</b>. The codebase intentionally avoids
+      over-engineering. See <code>CLAUDE.md</code>.</li>
+</ul>
+
+<h2>Things that will bite you (heads-up)</h2>
+<ul>
+  <li>CDG session can expire — the scraper detects and re-logins.</li>
+  <li>CDG price extraction pairs prices to refs by index; layout shifts can
+      misalign (known limitation).</li>
+  <li>First request after a long idle period can be slow if the asyncpg pool
+      drops — the pool lazily re-opens.</li>
+  <li><code>database.json</code> is maintained in a separate scraping session
+      and re-seeded regularly. Don't edit it by hand.</li>
+</ul>
+
+<h2>If you remember only three things</h2>
+<ol>
+  <li>Two bots, one DB, one live scraper. That's the whole shape.</li>
+  <li>LLM interprets words, not references. References are always DB-sourced.</li>
+  <li>Run with <code>uv run python3 -m src serve</code>. Everything else follows.</li>
+</ol>
+
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "VF3": {"make": "Peugeot", "country": "France"},
+  "VR3": {"make": "Peugeot", "country": "France"},
+  "VF7": {"make": "Citroen", "country": "France"},
+  "VR7": {"make": "Citroen", "country": "France"},
+  "VF1": {"make": "Renault", "country": "France"},
+  "VF2": {"make": "Renault", "country": "France"},
+  "UU1": {"make": "Dacia", "country": "Romania"},
+  "VGA": {"make": "Dacia", "country": "France"},
+  "WVW": {"make": "Volkswagen", "country": "Germany"},
+  "VSS": {"make": "Seat", "country": "Spain"},
+  "TMB": {"make": "Skoda", "country": "Czech Republic"},
+  "KMH": {"make": "Hyundai", "country": "South Korea"},
+  "KNA": {"make": "Kia", "country": "South Korea"},
+  "KND": {"make": "Kia", "country": "South Korea"},
+  "SB1": {"make": "Toyota", "country": "United Kingdom"},
+  "JTD": {"make": "Toyota", "country": "Japan"},
+  "WF0": {"make": "Ford", "country": "Germany"},
+  "ZFA": {"make": "Fiat", "country": "Italy"}
+}
