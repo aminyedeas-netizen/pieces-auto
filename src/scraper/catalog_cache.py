@@ -35,6 +35,8 @@ def _load() -> dict[str, dict]:
         data = json.loads(_RESULTS_FILE.read_text())
     except Exception as e:
         log.warning("Could not read catalog cache: %s", e)
+        if _cache is not None:
+            return _cache
         _cache = {}
         return _cache
     searched = data.get("searched", {})

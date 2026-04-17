@@ -86,6 +86,8 @@ def main():
                     await operator_app.stop()
                     await client_app.shutdown()
                     await operator_app.shutdown()
+                    from src.chain import close_scraper
+                    await close_scraper()
 
             asyncio.run(_serve())
 

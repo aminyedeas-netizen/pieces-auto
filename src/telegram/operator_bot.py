@@ -378,7 +378,8 @@ async def _save_ref_data(session: dict) -> str:
     vehicle_id = await upsert_vehicle(vehicle)
 
     # Save screenshots to local filesystem
-    base_dir = Path("screenshots") / _sanitize_path(vehicle_name) / _sanitize_path(part_name)
+    _project_root = Path(__file__).resolve().parent.parent.parent
+    base_dir = _project_root / "screenshots" / _sanitize_path(vehicle_name) / _sanitize_path(part_name)
     base_dir.mkdir(parents=True, exist_ok=True)
 
     for i, photo_bytes in enumerate(session["screenshots"]):
@@ -393,22 +394,25 @@ async def _save_ref_data(session: dict) -> str:
 
     # Insert references into DB
     ref_count = 0
+    ref_ids: list[int] = []
 
     # OE references
     for ref_entry in extraction.get("oe_references", []):
         brand = ref_entry.get("brand", "")
         ref_code = ref_entry.get("ref", "")
         if brand and ref_code:
-            await insert_reference(vehicle_id, part_name, brand, ref_code, True, source="oe")
+            rid = await insert_reference(vehicle_id, part_name, brand, ref_code, True, source="oe")
+            ref_ids.append(rid)
             ref_count += 1
 
     # Main product as aftermarket reference
     product = extraction.get("product_scraped")
     if product and product.get("brand") and product.get("reference"):
-        await insert_reference(
+        rid = await insert_reference(
             vehicle_id, part_name, product["brand"], product["reference"],
             False, product.get("price_eur"), source="main_product",
         )
+        ref_ids.append(rid)
         ref_count += 1
 
     # Equivalents
@@ -416,10 +420,11 @@ async def _save_ref_data(session: dict) -> str:
         brand = eq.get("brand", "")
         ref_code = eq.get("reference", "")
         if brand and ref_code:
-            await insert_reference(
+            rid = await insert_reference(
                 vehicle_id, part_name, brand, ref_code, False, eq.get("price_eur"),
                 source="equivalent",
             )
+            ref_ids.append(rid)
             ref_count += 1
 
     # Cross references
@@ -427,11 +432,19 @@ async def _save_ref_data(session: dict) -> str:
         brand = xr.get("brand", "")
         ref_code = xr.get("reference", "")
         if brand and ref_code:
-            await insert_reference(
+            rid = await insert_reference(
                 vehicle_id, part_name, brand, ref_code, False, xr.get("price_eur"),
                 source="cross_reference",
             )
+            ref_ids.append(rid)
             ref_count += 1
+
+    # Compatible vehicles — link to all inserted references
+    compat_vehicles = extraction.get("compatible_vehicles", [])
+    for rid in ref_ids:
+        for compat_name in compat_vehicles:
+            if isinstance(compat_name, str) and compat_name.strip():
+                await insert_compatibility(rid, compat_name.strip())
 
     return (
         f"{ref_count} references enregistrees pour\n"
@@ -831,40 +844,92 @@ async def handle_get_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         from src.db.repository import get_distinct_models
         models = await get_distinct_models(brand)
         session["models"] = models
-        from src.telegram.ui import format_model_label
-        keyboard = []
-        row = []
-        for i, model in enumerate(models):
-            label = format_model_label(brand, model)
-            row.append(InlineKeyboardButton(label, callback_data=f"get_model:{i}"))
-            if len(row) == 2:
-                keyboard.append(row)
-                row = []
-        if row:
-            keyboard.append(row)
-        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_brands")])
+        session.pop("family", None)
+        from src.telegram.ui import render_model_keyboard
+        keyboard, used_families = render_model_keyboard(
+            brand, models, "get_model", "get_family", back_cb="getback_brands",
+        )
+        session["use_families"] = used_families
         await query.edit_message_text(
             f"\U0001F697 Selectionnez le modele {brand} :", reply_markup=InlineKeyboardMarkup(keyboard),
         )
         return
 
-    if data == "getback_years":
+    # Family selected -> show variants
+    if data.startswith("get_family:"):
+        family = data.split(":", 1)[1]
+        brand = session.get("brand", "")
+        models = session.get("models", [])
+        from src.telegram.ui import group_families, render_variants_keyboard
+        groups = group_families(models)
+        indices = groups.get(family, [])
+        if not indices:
+            await query.edit_message_text("Famille introuvable.")
+            return
+        session["family"] = family
+        keyboard = render_variants_keyboard(
+            brand, models, indices, "get_model", back_cb="getback_models",
+        )
+        await query.edit_message_text(
+            f"\U0001F697 {brand} {family} — variante :",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data == "getback_fuels":
         brand = session.get("brand", "")
         model = session.get("model", "")
-        from src.db.repository import get_distinct_years_for_model
-        years = await get_distinct_years_for_model(brand, model)
+        from src.db.repository import get_fuels_for_model
+        fuels = await get_fuels_for_model(brand, model)
+        if len(fuels) <= 1:
+            # No fuel step — go back to models
+            brand = session.get("brand", "")
+            from src.db.repository import get_distinct_models
+            models = await get_distinct_models(brand)
+            session["models"] = models
+            session.pop("family", None)
+            from src.telegram.ui import render_model_keyboard
+            keyboard, used_families = render_model_keyboard(
+                brand, models, "get_model", "get_family", back_cb="getback_brands",
+            )
+            session["use_families"] = used_families
+            await query.edit_message_text(
+                f"Selectionnez le modele {brand} :", reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+            return
         keyboard = []
         row = []
-        for y in years:
-            row.append(InlineKeyboardButton(str(y), callback_data=f"get_year:{y}"))
-            if len(row) == 3:
+        for f in fuels:
+            row.append(InlineKeyboardButton(f, callback_data=f"get_fuel:{f}"))
+            if len(row) == 2:
                 keyboard.append(row)
                 row = []
         if row:
             keyboard.append(row)
         keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_models")])
         await query.edit_message_text(
-            f"\U0001F4C5 Selectionnez l'annee {brand} {model} :", reply_markup=InlineKeyboardMarkup(keyboard),
+            f"{model} — carburant :", reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data == "getback_motors":
+        brand = session.get("brand", "")
+        model = session.get("model", "")
+        fuel = session.get("fuel")
+        from src.db.repository import get_motorisations
+        motors = await get_motorisations(brand, model, fuel)
+        session["motors"] = motors
+        keyboard = []
+        for i, m in enumerate(motors):
+            fuel_d = m["fuel"].lower() if m["fuel"] else ""
+            label = f"{m['displacement']} {fuel_d} {m['power_hp']}CV"
+            keyboard.append([InlineKeyboardButton(label, callback_data=f"get_motor:{i}")])
+        from src.db.repository import get_fuels_for_model
+        fuels = await get_fuels_for_model(brand, model)
+        back_cb = "getback_fuels" if len(fuels) > 1 else "getback_models"
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data=back_cb)])
+        await query.edit_message_text(
+            f"Motorisation {brand} {model} :", reply_markup=InlineKeyboardMarkup(keyboard),
         )
         return
 
@@ -879,70 +944,91 @@ async def handle_get_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text(f"Aucun modele {brand} en base.")
             return
         session["models"] = models
-        from src.telegram.ui import format_model_label
-        keyboard = []
-        row = []
-        for i, model in enumerate(models):
-            label = format_model_label(brand, model)
-            row.append(InlineKeyboardButton(label, callback_data=f"get_model:{i}"))
-            if len(row) == 2:
-                keyboard.append(row)
-                row = []
-        if row:
-            keyboard.append(row)
-        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_brands")])
+        session.pop("family", None)
+        from src.telegram.ui import render_model_keyboard
+        keyboard, used_families = render_model_keyboard(
+            brand, models, "get_model", "get_family", back_cb="getback_brands",
+        )
+        session["use_families"] = used_families
         await query.edit_message_text(
             f"\U0001F697 Selectionnez le modele {brand} :", reply_markup=InlineKeyboardMarkup(keyboard),
         )
         return
 
-    # Model selected — show year buttons
+    # Model selected — show fuel or motors
     if data.startswith("get_model:"):
         idx = int(data.split(":", 1)[1])
         brand = session.get("brand", "")
         models = session.get("models", [])
         model = models[idx] if idx < len(models) else ""
         session["model"] = model
-        from src.db.repository import get_distinct_years_for_model
-        years = await get_distinct_years_for_model(brand, model)
-        if not years:
-            await query.edit_message_text(f"\u26A0\uFE0F Aucune annee pour {brand} {model}.")
+        from src.db.repository import get_fuels_for_model
+        fuels = await get_fuels_for_model(brand, model)
+        if not fuels:
+            await query.edit_message_text(f"Aucune motorisation pour {brand} {model}.")
             return
-        session["state"] = "pick_year"
-        keyboard = []
-        row = []
-        for y in years:
-            row.append(InlineKeyboardButton(str(y), callback_data=f"get_year:{y}"))
-            if len(row) == 3:
+        if len(fuels) > 1:
+            session["state"] = "pick_fuel"
+            keyboard = []
+            row = []
+            for f in fuels:
+                row.append(InlineKeyboardButton(f, callback_data=f"get_fuel:{f}"))
+                if len(row) == 2:
+                    keyboard.append(row)
+                    row = []
+            if row:
                 keyboard.append(row)
-                row = []
-        if row:
-            keyboard.append(row)
-        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_models")])
-        await query.edit_message_text(
-            f"\U0001F4C5 Selectionnez l'annee {brand} {model} :", reply_markup=InlineKeyboardMarkup(keyboard),
-        )
+            keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_models")])
+            await query.edit_message_text(
+                f"{model} — carburant :", reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+            return
+        # Single fuel — skip to motors
+        fuel = fuels[0]
+        session["fuel"] = fuel
+        await _get_show_motors(query, session, brand, model, fuel)
         return
 
-    # Year selected for /get
-    if data.startswith("get_year:"):
-        year = int(data.split(":", 1)[1])
+    # Fuel selected
+    if data.startswith("get_fuel:"):
+        fuel = data.split(":", 1)[1]
+        session["fuel"] = fuel
         brand = session.get("brand", "")
         model = session.get("model", "")
-        await _get_handle_year(query, session, brand, model, year)
+        await _get_show_motors(query, session, brand, model, fuel)
         return
 
-    # Engine selected
-    if data.startswith("get_engine:"):
-        vehicle_id = int(data.split(":", 1)[1])
-        from src.db.repository import get_vehicle_by_id
-        vehicle = await get_vehicle_by_id(vehicle_id)
-        if not vehicle:
+    # Motorisation selected
+    if data.startswith("get_motor:"):
+        idx = int(data.split(":", 1)[1])
+        motors = session.get("motors", [])
+        if idx >= len(motors):
+            await query.edit_message_text("Motorisation introuvable.")
+            return
+        m = motors[idx]
+        brand = session.get("brand", "")
+        model = session.get("model", "")
+        from src.db.repository import get_vehicle_ids_for_motorisation
+        vids = await get_vehicle_ids_for_motorisation(brand, model, m["fuel"], m["displacement"], m["power_hp"])
+        if not vids:
             await query.edit_message_text("Vehicule non trouve.")
             return
-        session["vehicle_id"] = vehicle_id
-        session["vehicle_name"] = vehicle.pa24_full_name
+        session["vehicle_ids"] = vids
+        session["vehicle_id"] = vids[0]
+        fuel_d = m["fuel"].lower() if m["fuel"] else ""
+        session["vehicle_name"] = f"{brand} {model} {m['displacement']} {fuel_d} {m['power_hp']}CV"
         session["state"] = "pick_part"
+        await _show_parts_list(query, session)
+        return
+
+    # Part category selected
+    if data.startswith("get_part_cat:"):
+        cat_idx = int(data.split(":", 1)[1])
+        await _show_get_parts_in_category(query, session, cat_idx)
+        return
+
+    # Back to part categories
+    if data == "getback_part_cats":
         await _show_parts_list(query, session)
         return
 
@@ -962,27 +1048,35 @@ async def handle_get_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
 
-async def _get_handle_year(query, session: dict, brand: str, model: str, year: int) -> None:
-    """After year selected in /get flow, show engine or auto-select."""
-    from src.db.repository import get_vehicles_for_model_year
-    vehicles = await get_vehicles_for_model_year(brand, model, year)
-    if not vehicles:
-        await query.edit_message_text(f"\u26A0\uFE0F Aucune motorisation pour {brand} {model} {year}.")
+async def _get_show_motors(query, session: dict, brand: str, model: str, fuel: str) -> None:
+    """Show motorisation buttons for /get flow."""
+    from src.db.repository import get_motorisations, get_vehicle_ids_for_motorisation, get_fuels_for_model
+    motors = await get_motorisations(brand, model, fuel)
+    if not motors:
+        await query.edit_message_text(f"Aucune motorisation pour {brand} {model}.")
         return
-    if len(vehicles) == 1:
-        v = vehicles[0]
-        session["vehicle_id"] = v.id
-        session["vehicle_name"] = v.pa24_full_name
+    if len(motors) == 1:
+        m = motors[0]
+        vids = await get_vehicle_ids_for_motorisation(brand, model, m["fuel"], m["displacement"], m["power_hp"])
+        session["vehicle_ids"] = vids
+        session["vehicle_id"] = vids[0] if vids else None
+        fuel_d = m["fuel"].lower() if m["fuel"] else ""
+        session["vehicle_name"] = f"{brand} {model} {m['displacement']} {fuel_d} {m['power_hp']}CV"
         session["state"] = "pick_part"
         await _show_parts_list(query, session)
         return
-    from src.telegram.ui import format_engine_label, grid_buttons
-    items = [(format_engine_label(v), f"get_engine:{v.id}") for v in vehicles]
-    keyboard = grid_buttons(items, cols=2)
-    keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="getback_years")])
+    session["state"] = "pick_motor"
+    session["motors"] = motors
+    keyboard = []
+    for i, m in enumerate(motors):
+        fuel_d = m["fuel"].lower() if m["fuel"] else ""
+        label = f"{m['displacement']} {fuel_d} {m['power_hp']}CV"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"get_motor:{i}")])
+    fuels = await get_fuels_for_model(brand, model)
+    back_cb = "getback_fuels" if len(fuels) > 1 else "getback_models"
+    keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data=back_cb)])
     await query.edit_message_text(
-        f"\u2699\uFE0F Selectionnez la motorisation {brand} {model} {year} :",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        f"Motorisation {brand} {model} :", reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
@@ -1000,9 +1094,14 @@ def _short_engine_label(v) -> str:
 
 
 async def _show_parts_list(query, session: dict) -> None:
-    """Show available parts for the selected vehicle from DB."""
-    from src.db.repository import get_parts_for_vehicle
-    parts = await get_parts_for_vehicle(session["vehicle_id"])
+    """Show part categories for the selected vehicle(s) from DB."""
+    vids = session.get("vehicle_ids") or ([session["vehicle_id"]] if session.get("vehicle_id") else [])
+    if len(vids) > 1:
+        from src.db.repository import get_parts_for_vehicles
+        parts = await get_parts_for_vehicles(vids)
+    else:
+        from src.db.repository import get_parts_for_vehicle
+        parts = await get_parts_for_vehicle(vids[0]) if vids else []
     session["parts"] = parts
 
     if not parts:
@@ -1011,13 +1110,36 @@ async def _show_parts_list(query, session: dict) -> None:
         )
         return
 
-    from src.telegram.ui import build_parts_keyboard
-    tail = [[InlineKeyboardButton("\u2B05 Retour", callback_data="getback_years")]]
-    keyboard = build_parts_keyboard(parts, callback_prefix="get_part", tail_rows=tail)
+    from src.telegram.ui import build_category_keyboard, categorize_parts
+    cat_kb = build_category_keyboard(parts, "get_part_cat", back_cb="getback_motors")
+    if cat_kb:
+        session["state"] = "pick_part_cat"
+        await query.edit_message_text(
+            f"\U0001F697 {session['vehicle_name']}\n"
+            "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
+            "\U0001F527 Selectionnez la categorie :",
+            reply_markup=InlineKeyboardMarkup(cat_kb),
+        )
+    else:
+        cats = categorize_parts(parts)
+        await _show_get_parts_in_category(query, session, cats[0][0])
+
+
+async def _show_get_parts_in_category(query, session: dict, cat_idx: int) -> None:
+    """Show parts within a category for /ref flow."""
+    parts = session.get("parts", [])
+    from src.telegram.ui import build_category_parts_keyboard, categorize_parts
+    cats = categorize_parts(parts)
+    cat_name = "Autres"
+    for ci, cn, _ in cats:
+        if ci == cat_idx:
+            cat_name = cn
+            break
+    back_cb = "getback_part_cats" if len(cats) > 1 else "getback_motors"
+    keyboard = build_category_parts_keyboard(parts, cat_idx, "get_part", back_cb)
     await query.edit_message_text(
         f"\U0001F697 {session['vehicle_name']}\n"
-        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
-        "\U0001F527 Selectionnez la piece :",
+        f"\U0001F527 {cat_name} :",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
@@ -1029,8 +1151,9 @@ async def _display_refs(query, chat_id: int, part_name: str) -> None:
         await query.edit_message_text("Session expiree.")
         return
 
+    vids = session.get("vehicle_ids") or ([session["vehicle_id"]] if session.get("vehicle_id") else [])
     from src.db.repository import lookup_references_grouped
-    grouped = await lookup_references_grouped(session["vehicle_id"], part_name)
+    grouped = await lookup_references_grouped(vids[0], part_name)
 
     oe = grouped["oe"]
     main = grouped["main_product"]
@@ -1136,7 +1259,7 @@ async def cmd_dispo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Try LLM parsing for brand+model+part
     from src.interpreter.llm import parse_vehicle_query
-    from src.db.repository import get_distinct_brands, get_distinct_models, get_vehicles_for_model
+    from src.db.repository import get_distinct_brands, get_distinct_models
 
     brands_list = await get_distinct_brands()
     try:
@@ -1162,7 +1285,6 @@ async def cmd_dispo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     brand = data.get("brand")
     model = data.get("model")
-    year = data.get("year")
     part = data.get("part")
 
     if not brand:
@@ -1195,36 +1317,65 @@ async def cmd_dispo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 break
         if matched_model:
             session["model"] = matched_model
-            from src.db.repository import get_distinct_years_for_model
-            years = await get_distinct_years_for_model(matched_brand, matched_model)
-            if not years:
-                await update.message.reply_text(f"\u26A0\uFE0F Aucune annee pour {matched_brand} {matched_model}.")
+            from src.db.repository import get_fuels_for_model, get_motorisations
+            fuels = await get_fuels_for_model(matched_brand, matched_model)
+            if not fuels:
+                await update.message.reply_text(f"Aucune motorisation pour {matched_brand} {matched_model}.")
                 dispo_sessions.pop(chat_id, None)
                 return
-            # If LLM extracted a year that matches DB, show as confirmation
-            if year and year in years:
-                session["state"] = "pick_year"
-                keyboard = [[InlineKeyboardButton(f"\u2705 {year}", callback_data=f"dispo_year:{year}")]]
+            if len(fuels) > 1:
+                session["state"] = "pick_fuel"
+                keyboard = []
+                row = []
+                for f in fuels:
+                    row.append(InlineKeyboardButton(f, callback_data=f"dispo_fuel:{f}"))
+                    if len(row) == 2:
+                        keyboard.append(row)
+                        row = []
+                if row:
+                    keyboard.append(row)
+                keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_models")])
                 await update.message.reply_text(
-                    f"\U0001F697 {matched_brand} {matched_model}\n\n"
-                    f"\U0001F4C5 Annee detectee : {year}\nConfirmez :",
+                    f"{matched_brand} {matched_model} — carburant :",
                     reply_markup=InlineKeyboardMarkup(keyboard),
                 )
                 return
-            # Always show year buttons
-            session["state"] = "pick_year"
+            fuel = fuels[0]
+            session["fuel"] = fuel
+            motors = await get_motorisations(matched_brand, matched_model, fuel)
+            if not motors:
+                await update.message.reply_text(f"Aucune motorisation pour {matched_brand} {matched_model}.")
+                dispo_sessions.pop(chat_id, None)
+                return
+            if len(motors) == 1:
+                m = motors[0]
+                from src.db.repository import get_vehicle_ids_for_motorisation
+                vehicle_ids = await get_vehicle_ids_for_motorisation(
+                    matched_brand, matched_model, m["fuel"], m["displacement"], m["power_hp"],
+                )
+                if not vehicle_ids:
+                    await update.message.reply_text("Aucun vehicule trouve.")
+                    dispo_sessions.pop(chat_id, None)
+                    return
+                session["vehicle_ids"] = vehicle_ids
+                session["vehicle_id"] = vehicle_ids[0]
+                fuel_display = m["fuel"].lower() if m["fuel"] else ""
+                session["vehicle_name"] = f"{matched_brand} {matched_model} {m['displacement']} {fuel_display} {m['power_hp']}CV"
+                pending = session.get("pending_part")
+                if pending:
+                    await _dispo_resolve_and_search(update, chat_id, pending)
+                else:
+                    await _dispo_show_parts(update, chat_id)
+                return
+            session["state"] = "pick_motor"
+            session["motors"] = motors
             keyboard = []
-            row = []
-            for y in years:
-                row.append(InlineKeyboardButton(str(y), callback_data=f"dispo_year:{y}"))
-                if len(row) == 3:
-                    keyboard.append(row)
-                    row = []
-            if row:
-                keyboard.append(row)
+            for i, m in enumerate(motors):
+                label = _dispo_format_motor_button(m["displacement"], m["fuel"], m["power_hp"])
+                keyboard.append([InlineKeyboardButton(label, callback_data=f"dispo_motor:{i}")])
+            keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_models")])
             await update.message.reply_text(
-                f"\U0001F697 {matched_brand} {matched_model}\n\n"
-                "\U0001F4C5 Selectionnez l'annee :",
+                f"Motorisation {matched_brand} {matched_model} :",
                 reply_markup=InlineKeyboardMarkup(keyboard),
             )
             return
@@ -1233,17 +1384,12 @@ async def cmd_dispo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     session["state"] = "pick_model"
     models = await get_distinct_models(matched_brand)
     session["models"] = models
-    from src.telegram.ui import format_model_label
-    keyboard = []
-    row = []
-    for i, m in enumerate(models):
-        label = format_model_label(matched_brand, m)
-        row.append(InlineKeyboardButton(label, callback_data=f"dispo_model:{i}"))
-        if len(row) == 2:
-            keyboard.append(row)
-            row = []
-    if row:
-        keyboard.append(row)
+    session.pop("family", None)
+    from src.telegram.ui import render_model_keyboard
+    keyboard, used_families = render_model_keyboard(
+        matched_brand, models, "dispo_model", "dispo_family", back_cb="dispoback_brands",
+    )
+    session["use_families"] = used_families
     await update.message.reply_text(
         f"\U0001F697 Selectionnez le modele {matched_brand} :",
         reply_markup=InlineKeyboardMarkup(keyboard),
@@ -1253,12 +1399,14 @@ async def cmd_dispo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def _dispo_resolve_and_search(update_or_query, chat_id: int, part_text: str) -> None:
     """Resolve part name then search CDG for the operator."""
     session = dispo_sessions.get(chat_id)
-    if not session or not session["vehicle_id"]:
+    if not session or not session.get("vehicle_ids"):
         return
+
+    vehicle_ids = session["vehicle_ids"]
 
     # Use client bot's matching logic
     from src.telegram.client_bot import _match_part_to_db
-    matched = await _match_part_to_db(session["vehicle_id"], part_text)
+    matched = await _match_part_to_db(vehicle_ids, part_text)
 
     # Handle __not_available__
     if len(matched) == 1 and matched[0].startswith("__not_available__:"):
@@ -1284,9 +1432,9 @@ async def _dispo_resolve_and_search(update_or_query, chat_id: int, part_text: st
         return
 
     # No match — show all parts
-    from src.db.repository import get_parts_for_vehicle
+    from src.db.repository import get_parts_for_vehicles
     from src.telegram.ui import build_parts_keyboard
-    all_parts = await get_parts_for_vehicle(session["vehicle_id"])
+    all_parts = await get_parts_for_vehicles(vehicle_ids)
     session["parts"] = all_parts
     keyboard = build_parts_keyboard(all_parts, "dispo_part")
     msg = f"'{part_text}' non disponible.\nSelectionnez :"
@@ -1296,40 +1444,96 @@ async def _dispo_resolve_and_search(update_or_query, chat_id: int, part_text: st
         await update_or_query.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
-async def _dispo_handle_year(query, chat_id: int, session: dict, brand: str, model: str, year: int) -> None:
-    """After year selected in /dispo flow, show engine or auto-select."""
-    from src.db.repository import get_vehicles_for_model_year
-    vehicles = await get_vehicles_for_model_year(brand, model, year)
-    if not vehicles:
-        await query.edit_message_text(f"\u26A0\uFE0F Aucune motorisation pour {brand} {model} {year}.")
+def _dispo_format_motor_button(displacement: str, fuel: str, power_hp: int) -> str:
+    """Format motorisation button for dispo flow."""
+    fuel_display = fuel.lower() if fuel else ""
+    return f"{displacement} {fuel_display} {power_hp}CV"
+
+
+async def _dispo_show_fuel_or_motors(query, chat_id: int, session: dict, brand: str, model: str) -> None:
+    """After model selected: show fuel step if multiple fuels, else skip to motors."""
+    from src.db.repository import get_fuels_for_model
+    fuels = await get_fuels_for_model(brand, model)
+    if len(fuels) > 1:
+        session["state"] = "pick_fuel"
+        keyboard = []
+        row = []
+        for f in fuels:
+            row.append(InlineKeyboardButton(f, callback_data=f"dispo_fuel:{f}"))
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_models")])
+        await query.edit_message_text(
+            f"{brand} {model} — carburant :",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+    else:
+        fuel = fuels[0] if fuels else None
+        session["fuel"] = fuel
+        await _dispo_show_motors(query, chat_id, session, brand, model, fuel)
+
+
+async def _dispo_show_motors(query, chat_id: int, session: dict, brand: str, model: str, fuel: str | None) -> None:
+    """Show motorisation buttons grouped by displacement+fuel+power."""
+    from src.db.repository import get_motorisations
+    motors = await get_motorisations(brand, model, fuel)
+    if not motors:
+        await query.edit_message_text(f"Aucune motorisation pour {brand} {model}.")
         return
-    if len(vehicles) == 1:
-        v = vehicles[0]
-        session["vehicle_id"] = v.id
-        session["vehicle_name"] = v.pa24_full_name
-        pending = session.get("pending_part")
-        if pending:
-            await _dispo_resolve_and_search(query, chat_id, pending)
-        else:
-            await _dispo_show_parts(query, chat_id)
+    if len(motors) == 1:
+        m = motors[0]
+        await _dispo_select_motorisation(query, chat_id, session, brand, model,
+                                         m["fuel"], m["displacement"], m["power_hp"])
         return
-    from src.telegram.ui import format_engine_label, grid_buttons
-    items = [(format_engine_label(v), f"dispo_engine:{v.id}") for v in vehicles]
-    keyboard = grid_buttons(items, cols=2)
-    keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_years")])
+    session["state"] = "pick_motor"
+    session["motors"] = motors
+    keyboard = []
+    for i, m in enumerate(motors):
+        label = _dispo_format_motor_button(m["displacement"], m["fuel"], m["power_hp"])
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"dispo_motor:{i}")])
+    from src.db.repository import get_fuels_for_model
+    fuels = await get_fuels_for_model(brand, model)
+    back_cb = "dispoback_fuels" if fuel and len(fuels) > 1 else "dispoback_models"
+    keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data=back_cb)])
     await query.edit_message_text(
-        f"\u2699\uFE0F Selectionnez la motorisation {brand} {model} {year} :",
+        f"Motorisation {brand} {model} :",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
+async def _dispo_select_motorisation(
+    query, chat_id: int, session: dict, brand: str, model: str,
+    fuel: str, displacement: str, power_hp: int,
+) -> None:
+    """Resolve motorisation to vehicle IDs and proceed."""
+    from src.db.repository import get_vehicle_ids_for_motorisation
+    vehicle_ids = await get_vehicle_ids_for_motorisation(brand, model, fuel, displacement, power_hp)
+    if not vehicle_ids:
+        await query.edit_message_text("Aucun vehicule trouve.")
+        return
+    session["vehicle_ids"] = vehicle_ids
+    session["vehicle_id"] = vehicle_ids[0]
+    fuel_display = fuel.lower() if fuel else ""
+    session["vehicle_name"] = f"{brand} {model} {displacement} {fuel_display} {power_hp}CV"
+
+    pending = session.get("pending_part")
+    if pending:
+        await _dispo_resolve_and_search(query, chat_id, pending)
+    else:
+        await _dispo_show_parts(query, chat_id)
+
+
 async def _dispo_show_parts(update_or_query, chat_id: int) -> None:
-    """Show available parts for the dispo vehicle."""
+    """Show part categories for the dispo vehicle."""
     session = dispo_sessions.get(chat_id)
     if not session:
         return
-    from src.db.repository import get_parts_for_vehicle
-    parts = await get_parts_for_vehicle(session["vehicle_id"])
+    from src.db.repository import get_parts_for_vehicles
+    vehicle_ids = session.get("vehicle_ids", [session["vehicle_id"]])
+    parts = await get_parts_for_vehicles(vehicle_ids)
     session["parts"] = parts
 
     is_query = hasattr(update_or_query, 'edit_message_text')
@@ -1342,13 +1546,44 @@ async def _dispo_show_parts(update_or_query, chat_id: int) -> None:
             await update_or_query.message.reply_text(text)
         return
 
-    from src.telegram.ui import build_parts_keyboard
-    keyboard = build_parts_keyboard(parts, "dispo_part")
+    from src.telegram.ui import build_category_keyboard, categorize_parts
+    cat_kb = build_category_keyboard(parts, "dispo_part_cat", back_cb="dispoback_motors")
+    if cat_kb:
+        session["state"] = "pick_part_cat"
+        text = (
+            f"\U0001F697 {session['vehicle_name']}\n"
+            "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
+            "\U0001F527 Selectionnez la categorie :"
+        )
+        if is_query:
+            await update_or_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(cat_kb))
+        else:
+            await update_or_query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(cat_kb))
+    else:
+        cats = categorize_parts(parts)
+        await _dispo_show_parts_in_category(update_or_query, chat_id, cats[0][0])
+
+
+async def _dispo_show_parts_in_category(update_or_query, chat_id: int, cat_idx: int) -> None:
+    """Show parts within a category for /dispo flow."""
+    session = dispo_sessions.get(chat_id)
+    if not session:
+        return
+    parts = session.get("parts", [])
+    from src.telegram.ui import build_category_parts_keyboard, categorize_parts
+    cats = categorize_parts(parts)
+    cat_name = "Autres"
+    for ci, cn, _ in cats:
+        if ci == cat_idx:
+            cat_name = cn
+            break
+    back_cb = "dispoback_part_cats" if len(cats) > 1 else "dispoback_motors"
+    keyboard = build_category_parts_keyboard(parts, cat_idx, "dispo_part", back_cb)
     text = (
         f"\U0001F697 {session['vehicle_name']}\n"
-        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
-        "\U0001F527 Selectionnez la piece :"
+        f"\U0001F527 {cat_name} :"
     )
+    is_query = hasattr(update_or_query, 'edit_message_text')
     if is_query:
         await update_or_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
@@ -1361,7 +1596,7 @@ async def _dispo_do_search(update_or_query, chat_id: int, part_name: str) -> Non
     if not session:
         return
 
-    vehicle_id = session["vehicle_id"]
+    vehicle_ids = session.get("vehicle_ids", [session["vehicle_id"]])
     vehicle_name = session["vehicle_name"]
     is_query = hasattr(update_or_query, 'edit_message_text')
 
@@ -1372,7 +1607,7 @@ async def _dispo_do_search(update_or_query, chat_id: int, part_name: str) -> Non
         await update_or_query.message.reply_text(loading)
 
     from src.chain import search_part
-    result_text = await search_part(vehicle_id, vehicle_name, part_name)
+    result_text = await search_part(vehicle_ids, vehicle_name, part_name)
 
     keyboard = [
         [InlineKeyboardButton("\U0001F527 Autre piece", callback_data="dispo_another")],
@@ -1422,43 +1657,50 @@ async def handle_dispo_callback(update: Update, context: ContextTypes.DEFAULT_TY
     if data == "dispoback_models":
         brand = session.get("brand", "")
         from src.db.repository import get_distinct_models
-        from src.telegram.ui import format_model_label
+        from src.telegram.ui import render_model_keyboard
         models = await get_distinct_models(brand)
         session["models"] = models
-        keyboard = []
-        row = []
-        for i, model in enumerate(models):
-            label = format_model_label(brand, model)
-            row.append(InlineKeyboardButton(label, callback_data=f"dispo_model:{i}"))
-            if len(row) == 2:
-                keyboard.append(row)
-                row = []
-        if row:
-            keyboard.append(row)
-        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_brands")])
+        session.pop("family", None)
+        keyboard, used_families = render_model_keyboard(
+            brand, models, "dispo_model", "dispo_family", back_cb="dispoback_brands",
+        )
+        session["use_families"] = used_families
         await query.edit_message_text(
             f"\U0001F697 Selectionnez le modele {brand} :", reply_markup=InlineKeyboardMarkup(keyboard),
         )
         return
 
-    if data == "dispoback_years":
+    if data.startswith("dispo_family:"):
+        family = data.split(":", 1)[1]
+        brand = session.get("brand", "")
+        models = session.get("models", [])
+        from src.telegram.ui import group_families, render_variants_keyboard
+        groups = group_families(models)
+        indices = groups.get(family, [])
+        if not indices:
+            await query.edit_message_text("Famille introuvable.")
+            return
+        session["family"] = family
+        keyboard = render_variants_keyboard(
+            brand, models, indices, "dispo_model", back_cb="dispoback_models",
+        )
+        await query.edit_message_text(
+            f"\U0001F697 {brand} {family} — variante :",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if data == "dispoback_fuels":
         brand = session.get("brand", "")
         model = session.get("model", "")
-        from src.db.repository import get_distinct_years_for_model
-        years = await get_distinct_years_for_model(brand, model)
-        keyboard = []
-        row = []
-        for y in years:
-            row.append(InlineKeyboardButton(str(y), callback_data=f"dispo_year:{y}"))
-            if len(row) == 3:
-                keyboard.append(row)
-                row = []
-        if row:
-            keyboard.append(row)
-        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_models")])
-        await query.edit_message_text(
-            f"\U0001F4C5 Selectionnez l'annee {brand} {model} :", reply_markup=InlineKeyboardMarkup(keyboard),
-        )
+        await _dispo_show_fuel_or_motors(query, chat_id, session, brand, model)
+        return
+
+    if data == "dispoback_motors":
+        brand = session.get("brand", "")
+        model = session.get("model", "")
+        fuel = session.get("fuel")
+        await _dispo_show_motors(query, chat_id, session, brand, model, fuel)
         return
 
     if data.startswith("dispo_brand:"):
@@ -1466,23 +1708,17 @@ async def handle_dispo_callback(update: Update, context: ContextTypes.DEFAULT_TY
         session["brand"] = brand
         session["state"] = "pick_model"
         from src.db.repository import get_distinct_models
-        from src.telegram.ui import format_model_label
+        from src.telegram.ui import render_model_keyboard
         models = await get_distinct_models(brand)
         if not models:
             await query.edit_message_text(f"Aucun modele {brand} en base.")
             return
         session["models"] = models
-        keyboard = []
-        row = []
-        for i, model in enumerate(models):
-            label = format_model_label(brand, model)
-            row.append(InlineKeyboardButton(label, callback_data=f"dispo_model:{i}"))
-            if len(row) == 2:
-                keyboard.append(row)
-                row = []
-        if row:
-            keyboard.append(row)
-        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_brands")])
+        session.pop("family", None)
+        keyboard, used_families = render_model_keyboard(
+            brand, models, "dispo_model", "dispo_family", back_cb="dispoback_brands",
+        )
+        session["use_families"] = used_families
         await query.edit_message_text(
             f"\U0001F697 Selectionnez le modele {brand} :", reply_markup=InlineKeyboardMarkup(keyboard),
         )
@@ -1494,48 +1730,37 @@ async def handle_dispo_callback(update: Update, context: ContextTypes.DEFAULT_TY
         models = session.get("models", [])
         model = models[idx] if idx < len(models) else ""
         session["model"] = model
-        from src.db.repository import get_distinct_years_for_model
-        years = await get_distinct_years_for_model(brand, model)
-        if not years:
-            await query.edit_message_text(f"\u26A0\uFE0F Aucune annee pour {brand} {model}.")
-            return
-        session["state"] = "pick_year"
-        keyboard = []
-        row = []
-        for y in years:
-            row.append(InlineKeyboardButton(str(y), callback_data=f"dispo_year:{y}"))
-            if len(row) == 3:
-                keyboard.append(row)
-                row = []
-        if row:
-            keyboard.append(row)
-        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_models")])
-        await query.edit_message_text(
-            f"\U0001F4C5 Selectionnez l'annee {brand} {model} :", reply_markup=InlineKeyboardMarkup(keyboard),
-        )
+        await _dispo_show_fuel_or_motors(query, chat_id, session, brand, model)
         return
 
-    if data.startswith("dispo_year:"):
-        year = int(data.split(":", 1)[1])
+    if data.startswith("dispo_fuel:"):
+        fuel = data.split(":", 1)[1]
         brand = session.get("brand", "")
         model = session.get("model", "")
-        await _dispo_handle_year(query, chat_id, session, brand, model, year)
+        session["fuel"] = fuel
+        await _dispo_show_motors(query, chat_id, session, brand, model, fuel)
         return
 
-    if data.startswith("dispo_engine:"):
-        vehicle_id = int(data.split(":", 1)[1])
-        from src.db.repository import get_vehicle_by_id
-        vehicle = await get_vehicle_by_id(vehicle_id)
-        if not vehicle:
-            await query.edit_message_text("Vehicule non trouve.")
+    if data.startswith("dispo_motor:"):
+        idx = int(data.split(":", 1)[1])
+        motors = session.get("motors", [])
+        if idx >= len(motors):
+            await query.edit_message_text("Motorisation non trouvee.")
             return
-        session["vehicle_id"] = vehicle_id
-        session["vehicle_name"] = vehicle.pa24_full_name
-        pending = session.get("pending_part")
-        if pending:
-            await _dispo_resolve_and_search(query, chat_id, pending)
-        else:
-            await _dispo_show_parts(query, chat_id)
+        m = motors[idx]
+        brand = session.get("brand", "")
+        model = session.get("model", "")
+        await _dispo_select_motorisation(query, chat_id, session, brand, model,
+                                         m["fuel"], m["displacement"], m["power_hp"])
+        return
+
+    if data.startswith("dispo_part_cat:"):
+        cat_idx = int(data.split(":", 1)[1])
+        await _dispo_show_parts_in_category(query, chat_id, cat_idx)
+        return
+
+    if data == "dispoback_part_cats":
+        await _dispo_show_parts(query, chat_id)
         return
 
     if data.startswith("dispo_part:"):
@@ -1593,6 +1818,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await update.message.reply_text(result_text.replace("\\", ""))
         return
 
+    # Skip LLM parsing if operator has an active dispo/ref flow in progress
+    existing = dispo_sessions.get(chat_id)
+    if existing and existing.get("state") not in (None, "parsing"):
+        await update.message.reply_text(
+            "Tapez /dispo ou /ref pour commencer une nouvelle recherche."
+        )
+        return
+
     # Try LLM parsing for brand+model+part (same as /dispo with text)
     dispo_sessions[chat_id] = {"state": "parsing", "vehicle_id": None, "vehicle_name": None}
     session = dispo_sessions[chat_id]
@@ -1644,7 +1877,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     session["brand"] = matched_brand
     session["pending_part"] = data.get("part")
     model = data.get("model")
-    year = data.get("year")
 
     if model:
         models = await get_distinct_models(matched_brand)
@@ -1655,34 +1887,70 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 break
         if matched_model:
             session["model"] = matched_model
-            from src.db.repository import get_distinct_years_for_model
-            years = await get_distinct_years_for_model(matched_brand, matched_model)
-            if not years:
-                await update.message.reply_text(f"\u26A0\uFE0F Aucune annee pour {matched_brand} {matched_model}.")
+            # Go to fuel/motor selection (text handler can't use query.edit_message_text,
+            # so we build keyboard inline and send as reply)
+            from src.db.repository import get_fuels_for_model, get_motorisations
+            fuels = await get_fuels_for_model(matched_brand, matched_model)
+            if not fuels:
+                await update.message.reply_text(f"Aucune motorisation pour {matched_brand} {matched_model}.")
                 dispo_sessions.pop(chat_id, None)
                 return
-            if year and year in years:
-                session["state"] = "pick_year"
-                keyboard = [[InlineKeyboardButton(f"\u2705 {year}", callback_data=f"dispo_year:{year}")]]
+            if len(fuels) > 1:
+                session["state"] = "pick_fuel"
+                keyboard = []
+                row = []
+                for f in fuels:
+                    row.append(InlineKeyboardButton(f, callback_data=f"dispo_fuel:{f}"))
+                    if len(row) == 2:
+                        keyboard.append(row)
+                        row = []
+                if row:
+                    keyboard.append(row)
+                keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_models")])
                 await update.message.reply_text(
-                    f"\U0001F697 {matched_brand} {matched_model}\n\n"
-                    f"\U0001F4C5 Annee detectee : {year}\nConfirmez :",
+                    f"{matched_brand} {matched_model} — carburant :",
                     reply_markup=InlineKeyboardMarkup(keyboard),
                 )
                 return
-            session["state"] = "pick_year"
+            # Single fuel — show motors
+            fuel = fuels[0]
+            session["fuel"] = fuel
+            motors = await get_motorisations(matched_brand, matched_model, fuel)
+            if not motors:
+                await update.message.reply_text(f"Aucune motorisation pour {matched_brand} {matched_model}.")
+                dispo_sessions.pop(chat_id, None)
+                return
+            if len(motors) == 1:
+                # Auto-select single motor
+                m = motors[0]
+                from src.db.repository import get_vehicle_ids_for_motorisation
+                vehicle_ids = await get_vehicle_ids_for_motorisation(
+                    matched_brand, matched_model, m["fuel"], m["displacement"], m["power_hp"],
+                )
+                if not vehicle_ids:
+                    await update.message.reply_text("Aucun vehicule trouve.")
+                    dispo_sessions.pop(chat_id, None)
+                    return
+                session["vehicle_ids"] = vehicle_ids
+                session["vehicle_id"] = vehicle_ids[0]
+                fuel_display = m["fuel"].lower() if m["fuel"] else ""
+                session["vehicle_name"] = f"{matched_brand} {matched_model} {m['displacement']} {fuel_display} {m['power_hp']}CV"
+                pending = session.get("pending_part")
+                if pending:
+                    await _dispo_resolve_and_search(update, chat_id, pending)
+                else:
+                    await _dispo_show_parts(update, chat_id)
+                return
+            # Multiple motors — show buttons
+            session["state"] = "pick_motor"
+            session["motors"] = motors
             keyboard = []
-            row = []
-            for y in years:
-                row.append(InlineKeyboardButton(str(y), callback_data=f"dispo_year:{y}"))
-                if len(row) == 3:
-                    keyboard.append(row)
-                    row = []
-            if row:
-                keyboard.append(row)
+            for i, m in enumerate(motors):
+                label = _dispo_format_motor_button(m["displacement"], m["fuel"], m["power_hp"])
+                keyboard.append([InlineKeyboardButton(label, callback_data=f"dispo_motor:{i}")])
+            keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data="dispoback_models")])
             await update.message.reply_text(
-                f"\U0001F697 {matched_brand} {matched_model}\n\n"
-                "\U0001F4C5 Selectionnez l'annee :",
+                f"Motorisation {matched_brand} {matched_model} :",
                 reply_markup=InlineKeyboardMarkup(keyboard),
             )
             return
@@ -1691,17 +1959,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     session["state"] = "pick_model"
     models = await get_distinct_models(matched_brand)
     session["models"] = models
-    from src.telegram.ui import format_model_label
-    keyboard = []
-    row = []
-    for i, m in enumerate(models):
-        label = format_model_label(matched_brand, m)
-        row.append(InlineKeyboardButton(label, callback_data=f"dispo_model:{i}"))
-        if len(row) == 2:
-            keyboard.append(row)
-            row = []
-    if row:
-        keyboard.append(row)
+    session.pop("family", None)
+    from src.telegram.ui import render_model_keyboard
+    keyboard, used_families = render_model_keyboard(
+        matched_brand, models, "dispo_model", "dispo_family", back_cb="dispoback_brands",
+    )
+    session["use_families"] = used_families
     await update.message.reply_text(
         f"\U0001F697 Selectionnez le modele {matched_brand} :",
         reply_markup=InlineKeyboardMarkup(keyboard),
@@ -1712,7 +1975,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 def build_operator_app() -> Application:
     """Build and return the operator bot Application."""
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .connect_timeout(30)
+        .read_timeout(30)
+        .build()
+    )
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("guide", cmd_guide))
     app.add_handler(CommandHandler("ajouter_ref", cmd_ajouter_ref))

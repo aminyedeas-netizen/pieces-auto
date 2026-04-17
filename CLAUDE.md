@@ -1,5 +1,8 @@
 # Project: Pieces Auto TN
 
+Auto parts search platform for Tunisia. Two Telegram bots connect customers to
+auto parts via a PiecesAuto24 reference database and CDG wholesaler live pricing.
+
 ## VERY IMPORTANT
 - Be simple. Approach tasks in a simple, incremental way.
 - Work incrementally ALWAYS. Small, simple steps. Validate and check each increment before moving on.
@@ -23,18 +26,24 @@
 - Try one test at a time. Be methodical.
 - Don't jump to conclusions. Don't apply workarounds.
 
-## Project Context
-Auto parts e-commerce platform for Tunisia. Two Telegram bots:
-1. OPERATOR BOT: feeds part references (from PiecesAuto24 screenshots) and VIN
-   mappings into the database. Used by the mechanic partner or data entry person.
-2. CLIENT BOT: customers identify their vehicle and search for parts. Prices
-   and availability come from CDG wholesaler in real-time.
+## What This Project Does
 
-PiecesAuto24 is the single source of truth for vehicle naming and part references.
-CDG is the single source of truth for prices and availability.
-The LLM NEVER guesses part references. References come ONLY from the database.
+1. **OPERATOR BOT** (@piece_line_admin_bot): Used by the mechanic partner to:
+   - `/ajouter_ref` — Ingest PiecesAuto24 screenshots via LLM vision, extract references
+   - `/vin` — Decode VIN numbers and associate them with DB vehicles
+   - `/ref` — Look up DB references (brand > model > fuel > motorisation > part category > part)
+   - `/dispo` — Check CDG availability + live pricing (same flow + CDG search)
+   - `/stats` — DB statistics
+   - `/guide` — Help text
+   - Free text — auto-parses "brand model part" or direct reference codes
 
-## Critical design rules
+2. **CLIENT BOT** (@piece_line_client_bot): Used by customers to:
+   - Identify vehicle via: photo carte grise (OCR), VIN text entry, or button selection
+   - Search parts via: free text ("Kia Picanto filtre a huile"), button selection (fuel > motorisation > part category > part), or direct ref code
+   - See live CDG prices and availability for matching references
+   - Franco-Arabic/misspelling tolerance ("quit de distribusion" -> "Kit de distribution")
+
+## Critical Design Rules
 1. The LLM NEVER guesses part references. References come ONLY from the database.
 2. VIN decoding: PSA brands use 3-char engine code at VIN positions 5-7, searched in vehicles table.
    Other brands use vin_patterns table (first 13 chars). Fallback: local JSON tables in data/vin_tables/.
@@ -42,126 +51,152 @@ The LLM NEVER guesses part references. References come ONLY from the database.
 4. Prices and stock are NEVER cached — always live from CDG scraper.
 5. Both bots are on Telegram (free, unlimited, no token issues).
 6. ZERO free text input for vehicle identification in operator bot. Always buttons from DB.
+7. PiecesAuto24 is the single source of truth for vehicle naming and part references.
+8. CDG is the single source of truth for prices and availability.
 
 ## Architecture
-- Python + python-telegram-bot (latest)
+
+```
+src/
+  __main__.py          — CLI entry point (decode-vin, init-db, seed, stats, serve)
+  main.py              — asyncio.run(_serve()) starts both bots + seeds DB
+  chain.py             — orchestrator: DB refs -> CDG search -> format results
+  db/
+    models.py          — dataclasses: Vehicle, StoredReference, CDGResult, etc.
+    repository.py      — asyncpg pool, all DB queries (CRUD for 6 tables)
+    schema.sql         — DDL for 6 tables
+    seed.py            — incremental seed from data/database.json (COPY + chunking + retry)
+  interpreter/
+    llm.py             — OpenRouter LLM calls (vision + text), parse_vehicle_query()
+  scraper/
+    cdg.py             — Playwright headless browser, CDG login/search/parse
+    catalog_cache.py   — reads cdg_stock_results.json to skip known-not-found refs
+  telegram/
+    operator_bot.py    — all operator bot handlers and commands
+    client_bot.py      — all client bot handlers and commands
+    ui.py              — shared UI: keyboard builders, label formatters, escape_md
+  vin/
+    decoder.py         — VIN decoding (WMI, year, PSA engine code, JSON fallback)
+scripts/
+  cdg_stock_check.py   — batch-search DB refs on CDG, save results JSON
+  generate_cdg_report.py — HTML+PDF report from CDG results
+  generate_project_guide.py — project overview PDF for sharing
+data/
+  database.json        — PA24 scraped data (structured: vehicle dict + product dict)
+  vin_tables/          — local JSON VIN decode tables
+  cdg_stock_results.json — CDG search cache (built by scripts)
+```
+
+### Tech Stack
+- Python 3.12 + python-telegram-bot (latest)
 - LLM via OpenRouter (google/gemini-2.0-flash-exp for vision, anthropic/claude-haiku-4.5 for text)
-- Playwright for CDG scraping
-- PostgreSQL (Supabase)
+- Playwright for CDG scraping (headless Chromium)
+- PostgreSQL via Supabase (asyncpg connection pool)
 - uv as package manager
 
 ## Database Schema (6 tables)
-- vehicles: exact names from PiecesAuto24 (pa24_full_name)
-- vin_patterns: first 13 chars of VIN -> vehicle_id
-- part_references: vehicle_id + part_name + brand + reference
-- part_vehicle_compatibility: cross-reference compatible vehicles
-- screenshots: local screenshot storage metadata
-- requests_log: client request audit trail
+- `vehicles` — exact names from PA24 (UNIQUE pa24_full_name). Fields: brand, model, displacement, power_hp, fuel, year_start, year_end, engine_code
+- `vin_patterns` — first 13 chars of VIN -> vehicle_id (UNIQUE vin_pattern)
+- `part_references` — vehicle_id + part_name + brand + reference (UNIQUE combo). source: oe/main_product/equivalent/cross_reference
+- `part_vehicle_compatibility` — reference_id + compatible_vehicle_name (UNIQUE combo)
+- `screenshots` — vehicle_id + filename metadata
+- `requests_log` — client request audit trail
 
-## Environment variables
-TELEGRAM_OPERATOR_BOT_TOKEN, TELEGRAM_CLIENT_BOT_TOKEN
-OPENROUTER_API_KEY, CDG_URL, CDG_LOGIN, CDG_PASSWORD
-DATABASE_URL
+## Data Flow
 
-## How to run
-- CLI testing: uv run python3 -m src <command>
-- Both bots: uv run python3 -m src serve
-- Init DB: uv run python3 -m src init-db
+### database.json Format (structured)
+Each entry has:
+- `vehicle`: dict with `brand`, `model_generation`, `displacement`, `cv`, `fuel`, `year_start`, `year_end`, `engine_code`, `raw_vehicle`
+- `part`: string (part name)
+- `product`: dict with `brand`, `reference`, `name`
+- `specs`: dict of part specifications
+- `equivalents`: list of {brand, reference, price_eur}
+- `cross_references`: list of {brand, reference, price_eur}
+- `compatible_vehicles`: list of compatible vehicle descriptions
 
-## Operator Bot Commands
-- /ajouter_ref -- Screenshot ingestion from PiecesAuto24 (cancel button at every step)
-- /vin -- VIN decode + vehicle association (clear instructions, case E / chassis)
-- /get -- DB reference lookup (brand > model > year > engine > part buttons, no prices)
-- /dispo -- CDG availability + price check (brand > model > year > engine, LLM text parsing, direct ref search)
-- /stats -- DB statistics
-- /guide -- Help with all commands
+### Seed Process
+`seed_vehicles()` in seed.py runs on every `serve` startup (incremental):
+1. Collects all `raw_vehicle` names from database.json
+2. Deletes stale vehicles not in current data (via temp table JOIN)
+3. Upserts vehicles via COPY + staging table (fast for any size)
+4. Compares ref counts per vehicle (DB vs database.json) — skips unchanged vehicles
+5. Inserts only new refs in 10k-row chunks with fresh connections + retry (handles Supabase connection drops)
 
-## Client Bot Features
-- 3 vehicle ID paths: photo carte grise, VIN entry, model selection buttons
-- Free text input: "Kia Picanto filtre a huile" -> LLM extracts brand+model+part
-- Year selection: Brand > Model > Year buttons > Engine (auto-skips single options)
-- LLM year extraction: "Peugeot 208 2019 courroie" -> filters by year_start
-- Part matching: fuzzy SQL first, then LLM against available parts list
-- Misspelling/franco-arabic support: "quit de distribusion" -> "Kit de distribution"
-- Ambiguous parts: "Amortisseur" -> buttons [avant] [arriere]
-- Confirmation before search: vehicle + part summary
-- Direct reference search: bare ref code or "Gates K015578XS" -> CDG search
-- Text confirmations: "ok", "oui" triggers pending actions
-- Navigation: "Autre piece" (same vehicle) + "Nouvelle recherche" (reset)
+### CDG Search Flow
+1. User selects vehicle + part -> DB query returns references
+2. References split via catalog_cache: skip known-not-found, search the rest
+3. CDG scraper searches each ref (with asyncio.Lock for concurrency)
+4. Results formatted: available (with price), rupture, non-ref sections
+5. Operator notified if no refs exist in DB for requested vehicle+part
 
-## Build Progress
-- [x] Step 1: Project init, deps, file structure, .env, schema.sql
-- [x] Step 2: VIN decoder (41 WMI codes, year table, PSA engine code DB search, JSON fallback)
-- [x] Step 3: DB repository (full CRUD for 6 tables) + seed from data/database.json
-- [x] Step 4: Operator bot /ajouter_ref (multi-screenshot, LLM vision, cancel buttons)
-- [x] Step 5: Operator bot /vin (VIN decode, button-based vehicle selection, pattern storage)
-- [x] Step 6: Client bot vehicle identification (photo, VIN, model selection, max 1 retry)
-- [x] Step 7: Client bot part selection (dynamic from DB, LLM fuzzy matching)
-- [x] Step 8: CDG scraper (headless Playwright, search_all for all refs)
-- [x] Step 9: Full chain (DB refs -> CDG -> available/rupture/non-ref sections)
-- [x] Step 10: Operator /stats + /guide + /get (DB refs) + /dispo (CDG search)
-- [x] Step 11: Reference lookup both bots (grouped OE/equiv/cross, index-based callbacks)
-- [x] Step 12: Smart text input (LLM brand+model+part+ref extraction, franco-arabic)
-- [x] Step 13: Direct reference search (bare ref or brand+ref -> CDG)
-- [x] Step 14: Bug fixes (callback truncation, VIN state, retry counter, insert_reference count)
-- [x] Step 15: Year selection buttons (Brand > Model > Year > Engine in both bots, LLM year extraction)
-- [x] Step 16: Code review fixes (8 issues), CDG equivalents, back buttons, operator text handler
-- [ ] Step 17: CDG stock catalog (ongoing — batch searching DB refs on CDG, building availability map)
+## Environment Variables
+```
+TELEGRAM_OPERATOR_BOT_TOKEN    — operator bot token
+TELEGRAM_CLIENT_BOT_TOKEN      — client bot token
+TELEGRAM_OPERATOR_CHAT_ID      — chat ID for operator notifications
+OPENROUTER_API_KEY             — LLM API key
+CDG_URL                        — CDG wholesaler base URL
+CDG_LOGIN / CDG_PASSWORD       — CDG credentials
+DATABASE_URL                   — Supabase PostgreSQL connection string
+```
+
+## How to Run
+- Both bots: `uv run python3 -m src serve` (auto-seeds DB on startup)
+- Seed only: `uv run python3 -m src seed`
+- Init schema: `uv run python3 -m src init-db`
+- CLI VIN decode: `uv run python3 -m src decode-vin <VIN>`
+- DB stats: `uv run python3 -m src stats`
+
+## UI Architecture (src/telegram/ui.py)
+
+### Display Contract
+Button labels are display-only transforms. DB values are cached in session at original form.
+Callbacks carry indices (e.g. `model:3`), handlers resolve back to original DB value.
+
+### Model Picker — Family Grouping
+For brands with many models (>6, with families having 2+ variants):
+- First shows family buttons (e.g. "A3 (4)", "A4 (3)")
+- On tap, shows variants within that family
+- Falls back to flat list for small brands
+- `model_family(m)` = first token of model string
+- `render_model_keyboard()` / `render_variants_keyboard()` handle this
+
+### Label Formatting
+- `format_model_label()`: strips brand prefix, abbreviates body styles (Sportback->Sportb.), end-truncates at 30 chars
+- `format_engine_label()`: compact "1.6 90CV Diesel 9HX"
+- `adaptive_grid()`: 2-col if all labels <=22 chars, else 1-col
+- `build_parts_keyboard()`: categorized parts with divider headers
+
+### Part Category Grouping
+When a vehicle has parts in multiple categories, an intermediary step shows category buttons
+(e.g. "Filtration (4)", "Freinage (3)") before listing individual parts.
+- `categorize_parts()`: groups parts into categories, returns (cat_idx, cat_name, part_indices)
+- `build_category_keyboard()`: category buttons with counts. Returns [] if single category (skips step).
+- `build_category_parts_keyboard()`: parts within a selected category
+- Applied in all three flows: client bot, operator /ref, operator /dispo
+
+### Vehicle Selection Flow
+Both bots use Fuel > Motorisation (not Year > Engine):
+- Brand > Model (with family grouping) > Fuel (skipped if single) > Motorisation > Part category > Part
+- Motorisation groups vehicles by (displacement, fuel, power_hp), maps to multiple vehicle_ids
+- Format: "1.6 essence 102CV"
 
 ## Current State (April 2026)
 
 ### Database
-- 275 vehicles, 21,196 references (seeded from data/database.json)
-- Re-seed: `uv run python3 -m src seed` (auto-seeds on `serve` startup too)
-- database.json is maintained in a separate Claude Code session and updated regularly
+- 6,000+ vehicles, ~1,000,000+ references (seeded from data/database.json)
+- database.json maintained in a separate Claude Code session, growing continuously
 
-### CDG Scraper (src/scraper/cdg.py)
-Key behaviors implemented:
-- **Equivalents expansion**: after each search, clicks the equiv count button (e.g. "5") to
-  show all equivalent references CDG carries for that part. Then navigates back to catalog.
-- **Session recovery**: checks page title before each search; re-logins if CDG session expired.
-- **Concurrency lock**: asyncio.Lock serializes all search calls (both bots share one scraper).
-- **Price extraction**: prices come from `<input>` values near "Prix HT" labels, paired by index
-  with references. Known limitation: index-based pairing can misalign if page has extra elements.
+### Known Limitations
+- CDG price extraction uses index pairing (known misalignment risk with rupture items — mitigated by only incrementing price_idx for available items)
+- In-memory sessions lost on bot restart (acceptable for now)
+- `/ajouter_ref` creates vehicles from LLM-scraped names which may not match PA24 naming exactly — can cause near-duplicates in the vehicles table. Design fix: select vehicle from DB buttons instead of LLM-generated names.
+- CDG stock check script and bot scraper can race on cdg_stock_results.json reads (mitigated: partial read falls back to existing cache instead of clearing)
 
-### CDG Stock Check Scripts (scripts/)
-- `scripts/cdg_stock_check.py` — batch-searches DB references on CDG. Key features:
-  - Priority order: kit distribution > embrayage > freinage > roulements > pompe eau >
-    amortisseurs > direction > demarreurs > alternateurs > thermostat > joint > courroie
-    accessoire > filtres > bougies (CDG-likely parts first, filters last)
-  - Vehicle priority: 208 PureTech, Logan, Sandero, Clio, Picanto, i10, Polo, Yaris, etc.
-  - `--resume` flag: skips already-searched refs, fetches new ones from DB
-  - `--limit N`: max refs to search (default 200)
-  - `--brand` / `--vehicle`: filter by brand or vehicle pattern
-  - Exact ref matching only (CDG does fuzzy search, we filter to exact matches)
-  - Saves screenshots for found refs to data/cdg_screenshots/
-  - Auto-saves every 25 searches to data/cdg_stock_results.json
-  - Auto-generates HTML+PDF report at end of run
-- `scripts/generate_cdg_report.py` — generates data/cdg_report.html + .pdf from results JSON.
-  Report organized by vehicle brand > vehicle card > reference table with clean separators.
-
-### CDG Search Results So Far
-- ~800/2000 refs searched (background search still running)
-- CDG overlap is low (~5% hit rate) but finds high-value mechanical parts
-- CDG carries VALEO embrayage kits, OE distribution tensioners
-- CDG does NOT carry most aftermarket brands in our DB (RIDEX, MAPCO, FEBI, etc.)
-- Filters/bougies: CDG unlikely to have them (low priority, searched last)
-- Google verification confirmed accuracy: CDG descriptions match actual parts
-
-### Recent Fixes Applied (Step 16)
-1. CDG session recovery (re-login on expiry)
-2. CDG concurrency lock (asyncio.Lock)
-3. Fixed broken import `decode_vin_with_db` -> `decode_vin` in src/interpreter/llm.py
-4. Fixed wrong `notify_operator` import in client_bot.py (was from operator_bot, now from chain)
-5. Seed FK cascade: deletes vin_patterns, screenshots, part_vehicle_compatibility before vehicles
-6. VIN regex word boundaries (\b) to prevent false matches
-7. CDG equivalents: scraper clicks equiv button to show all equivalent refs
-8. Back buttons (Retour) at every selection step in both bots
-9. Operator bot text handler: free text for reference search + vehicle+part parsing (like client bot)
-
-### Known Issues / Limitations
-- CDG price extraction uses index pairing (Prix HT label index -> reference index). If CDG page
-  layout has extra elements, prices can misalign. Needs DOM row-based extraction for 100% accuracy.
-- In-memory sessions lost on bot restart (acceptable for now, would need DB persistence to fix).
-- 208 PureTech appears as "208 CC" and "208 Phase 2" in model selection — this is correct per
-  PiecesAuto24 naming, not a bug.
+### Build Progress
+- [x] Steps 1-16: Full platform implemented (both bots, all commands, CDG scraper, UI improvements)
+- [ ] Step 17: CDG stock catalog (ongoing — batch searching DB refs on CDG)
+- [x] Step 18: Code review fixes (15 issues from REVIEW.md)
+- [x] Step 19: Vehicle selection rewrite (Fuel > Motorisation instead of Year > Engine)
+- [x] Step 20: Part category intermediary step (both bots)
+- [x] Step 21: Incremental seed with COPY + chunking + retry

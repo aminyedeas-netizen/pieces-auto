@@ -180,8 +180,11 @@ class CDGScraper:
 
                 available = i > 0 and lines[i - 1] == "Quantité"
 
-                price = prices[price_idx] if price_idx < len(prices) else None
-                price_idx += 1
+                if available:
+                    price = prices[price_idx] if price_idx < len(prices) else None
+                    price_idx += 1
+                else:
+                    price = None
 
                 results.append(CDGResult(
                     reference=ref,

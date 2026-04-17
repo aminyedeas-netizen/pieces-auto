@@ -1,7 +1,7 @@
 """Seed database from data/database.json (PiecesAuto24 scraped data)."""
 
+import asyncio
 import json
-import re
 from pathlib import Path
 
 import asyncpg
@@ -11,75 +11,25 @@ from src.db.repository import DATABASE_URL
 
 DATA_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "database.json"
 
+_FUEL_MAP = {"Petrol": "Essence", "Diesel": "Diesel", "CNG": "CNG",
+             "Electric": "Electrique", "Hybrid": "Hybride"}
 
-def _parse_vehicle_name(name: str) -> Vehicle:
-    """Parse a PiecesAuto24 vehicle name string into a Vehicle."""
-    parts = name.split()
-    brand = parts[0] if parts else ""
 
-    displacement = None
-    power_hp = None
-    fuel = None
-    engine_code = None
-    year_start = None
-    year_end = None
-    model_parts = []
-
-    i = 1
-    while i < len(parts):
-        p = parts[i]
-        if re.match(r"^\d+\.\d+$", p):
-            displacement = p
-            i += 1
-            break
-        model_parts.append(p)
-        i += 1
-
-    remaining = parts[i:]
-    remaining_str = " ".join(remaining)
-
-    hp_match = re.search(r"(\d+)\s*CV", remaining_str)
-    if hp_match:
-        power_hp = int(hp_match.group(1))
-
-    for fuel_kw in ("Diesel", "Essence"):
-        if fuel_kw in remaining_str:
-            fuel = fuel_kw
-            break
-
-    year_match = re.search(r"(\d{4})\s*-\s*(\d{4}|\.\.\.)", remaining_str)
-    if year_match:
-        year_start = int(year_match.group(1))
-        if year_match.group(2) != "...":
-            year_end = int(year_match.group(2))
-
-    skip = {"CV", "Essence", "Diesel", "-", "..."}
-    tech_kw = {"PureTech", "BlueHDi", "HDi", "dCi", "TDI", "TSI", "MPI",
-               "CRDi", "T-GDi", "VTVT", "MSi", "GTI", "TCi", "VTi"}
-    candidates = []
-    for token in remaining:
-        if token in skip or re.match(r"^\d{4}$", token) or re.match(r"^\d+$", token):
-            continue
-        if re.match(r"^\(.*\)$", token) or token in tech_kw:
-            continue
-        if re.match(r"^[A-Za-z0-9]", token):
-            candidates.append(token)
-
-    if candidates:
-        engine_code = " ".join(candidates)
-
-    model = " ".join(model_parts) if model_parts else ""
-
+def _vehicle_from_dict(v: dict) -> Vehicle:
+    """Build a Vehicle from the structured vehicle dict in database.json."""
+    disp = v.get("displacement")
+    disp_str = str(disp) if disp else None
+    fuel_raw = v.get("fuel", "")
     return Vehicle(
-        brand=brand.upper(),
-        model=model,
-        displacement=displacement,
-        power_hp=power_hp,
-        fuel=fuel,
-        year_start=year_start,
-        year_end=year_end,
-        engine_code=engine_code,
-        pa24_full_name=name,
+        brand=v.get("brand", "").upper(),
+        model=v.get("model_generation", ""),
+        displacement=disp_str,
+        power_hp=v.get("cv"),
+        fuel=_FUEL_MAP.get(fuel_raw, fuel_raw),
+        year_start=v.get("year_start"),
+        year_end=v.get("year_end"),
+        engine_code=v.get("engine_code") or None,
+        pa24_full_name=v.get("raw_vehicle", ""),
     )
 
 
@@ -92,42 +42,11 @@ def _extract_oe_refs(specs: dict) -> list[str]:
     return []
 
 
-async def _upsert_vehicle(conn: asyncpg.Connection, vehicle: Vehicle) -> int:
-    """Upsert vehicle using existing connection."""
-    return await conn.fetchval(
-        """
-        INSERT INTO vehicles (brand, model, chassis_code, displacement,
-               power_hp, fuel, year_start, year_end, engine_code, pa24_full_name)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        ON CONFLICT (pa24_full_name) DO UPDATE SET
-            brand = $1, model = $2, chassis_code = $3, displacement = $4,
-            power_hp = $5, fuel = $6, year_start = $7, year_end = $8, engine_code = $9
-        RETURNING id
-        """,
-        vehicle.brand, vehicle.model, vehicle.chassis_code, vehicle.displacement,
-        vehicle.power_hp, vehicle.fuel, vehicle.year_start, vehicle.year_end,
-        vehicle.engine_code, vehicle.pa24_full_name,
-    )
-
-
-async def _insert_ref(
-    conn: asyncpg.Connection, vehicle_id: int, part_name: str,
-    brand: str, reference: str, is_oe: bool,
-    price_eur: float | None, source: str,
-) -> None:
-    """Insert reference using existing connection."""
-    await conn.execute(
-        """
-        INSERT INTO part_references (vehicle_id, part_name, brand, reference, is_oe, price_eur, source)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT DO NOTHING
-        """,
-        vehicle_id, part_name, brand, reference, is_oe, price_eur, source,
-    )
-
-
 async def seed_vehicles():
-    """Load data from database.json: upsert vehicles and insert all references."""
+    """Load data from database.json: upsert vehicles and insert all references.
+
+    Uses COPY + staging tables for speed on large datasets.
+    """
     if not DATA_PATH.exists():
         print("data/database.json not found")
         return
@@ -139,57 +58,124 @@ async def seed_vehicles():
 
     conn = await asyncpg.connect(DATABASE_URL, statement_cache_size=0)
     try:
-        # Phase 0: collect all valid pa24_full_names, delete stale data
-        all_names = list({entry["vehicle"] for entry in data if entry.get("vehicle")})
-        if all_names:
-            stale_filter = "SELECT id FROM vehicles WHERE pa24_full_name != ALL($1::text[])"
-            # Delete from all FK-dependent tables first
-            await conn.execute(
-                "DELETE FROM part_vehicle_compatibility WHERE reference_id IN "
-                f"(SELECT id FROM part_references WHERE vehicle_id IN ({stale_filter}))",
-                all_names,
-            )
-            await conn.execute(
-                f"DELETE FROM part_references WHERE vehicle_id IN ({stale_filter})",
-                all_names,
-            )
-            await conn.execute(
-                f"DELETE FROM screenshots WHERE vehicle_id IN ({stale_filter})",
-                all_names,
-            )
-            await conn.execute(
-                f"DELETE FROM vin_patterns WHERE vehicle_id IN ({stale_filter})",
-                all_names,
-            )
-            await conn.execute(
-                "DELETE FROM vehicles WHERE pa24_full_name != ALL($1::text[])",
-                all_names,
-            )
+        await conn.execute("SET statement_timeout = '0'")
+        # Phase 0: delete stale vehicles via temp table
+        all_names = list({
+            entry["vehicle"]["raw_vehicle"]
+            for entry in data
+            if isinstance(entry.get("vehicle"), dict) and entry["vehicle"].get("raw_vehicle")
+        })
+        print(f"Preparing {len(all_names)} vehicles...")
 
-        # Phase 1: upsert vehicles
-        seen_vehicles: dict[str, int] = {}
+        await conn.execute("CREATE TEMP TABLE _keep(name TEXT PRIMARY KEY)")
+        await conn.copy_records_to_table("_keep", records=[(n,) for n in all_names], columns=["name"])
+        stale = "SELECT id FROM vehicles v WHERE NOT EXISTS (SELECT 1 FROM _keep k WHERE k.name = v.pa24_full_name)"
+        await conn.execute(f"DELETE FROM part_vehicle_compatibility WHERE reference_id IN (SELECT id FROM part_references WHERE vehicle_id IN ({stale}))")
+        await conn.execute(f"DELETE FROM part_references WHERE vehicle_id IN ({stale})")
+        await conn.execute(f"DELETE FROM screenshots WHERE vehicle_id IN ({stale})")
+        await conn.execute(f"DELETE FROM vin_patterns WHERE vehicle_id IN ({stale})")
+        await conn.execute("DELETE FROM vehicles v WHERE NOT EXISTS (SELECT 1 FROM _keep k WHERE k.name = v.pa24_full_name)")
+        await conn.execute("DROP TABLE _keep")
+        print("Stale data cleaned")
+
+        # Phase 1: batch upsert vehicles via COPY
+        vehicle_rows = []
+        seen_names = set()
         for entry in data:
-            vehicle_name = entry.get("vehicle", "")
-            if not vehicle_name or vehicle_name in seen_vehicles:
+            v_dict = entry.get("vehicle")
+            if not isinstance(v_dict, dict):
                 continue
-            vehicle = _parse_vehicle_name(vehicle_name)
-            vehicle_id = await _upsert_vehicle(conn, vehicle)
-            seen_vehicles[vehicle_name] = vehicle_id
+            name = v_dict.get("raw_vehicle", "")
+            if not name or name in seen_names:
+                continue
+            seen_names.add(name)
+            v = _vehicle_from_dict(v_dict)
+            vehicle_rows.append((
+                v.brand, v.model, v.chassis_code, v.displacement,
+                v.power_hp, v.fuel, v.year_start, v.year_end, v.engine_code, v.pa24_full_name,
+            ))
 
-        print(f"Upserted {len(seen_vehicles)} vehicles")
+        cols = ["brand", "model", "chassis_code", "displacement",
+                "power_hp", "fuel", "year_start", "year_end", "engine_code", "pa24_full_name"]
+        await conn.execute(f"CREATE TEMP TABLE _vstg ({', '.join(f'{c} TEXT' if c not in ('power_hp','year_start','year_end') else f'{c} INT' for c in cols)})")
+        await conn.copy_records_to_table("_vstg", records=vehicle_rows, columns=cols)
+        await conn.execute("""
+            INSERT INTO vehicles (brand, model, chassis_code, displacement,
+                   power_hp, fuel, year_start, year_end, engine_code, pa24_full_name)
+            SELECT brand, model, chassis_code, displacement,
+                   power_hp, fuel, year_start, year_end, engine_code, pa24_full_name
+            FROM _vstg
+            ON CONFLICT (pa24_full_name) DO UPDATE SET
+                brand=EXCLUDED.brand, model=EXCLUDED.model, chassis_code=EXCLUDED.chassis_code,
+                displacement=EXCLUDED.displacement, power_hp=EXCLUDED.power_hp, fuel=EXCLUDED.fuel,
+                year_start=EXCLUDED.year_start, year_end=EXCLUDED.year_end, engine_code=EXCLUDED.engine_code
+        """)
+        await conn.execute("DROP TABLE _vstg")
 
-        # Phase 2: batch-collect all references
-        ref_rows: list[tuple] = []
+        # Build name->id map
+        rows = await conn.fetch("SELECT id, pa24_full_name FROM vehicles")
+        seen_vehicles = {r["pa24_full_name"]: r["id"] for r in rows}
+        print(f"Upserted {len(vehicle_rows)} vehicles")
+
+        # Phase 2: collect refs, skipping vehicles already fully seeded
+        # First pass: count expected refs per vehicle from database.json
+        expected_counts: dict[int, int] = {}
         for entry in data:
-            vehicle_name = entry.get("vehicle", "")
+            v_dict = entry.get("vehicle")
+            if not isinstance(v_dict, dict):
+                continue
+            vehicle_name = v_dict.get("raw_vehicle", "")
             if not vehicle_name or vehicle_name not in seen_vehicles:
                 continue
             vehicle_id = seen_vehicles[vehicle_name]
-            part_name = entry.get("part_searched", "")
+            part_name = entry.get("part") or entry.get("part_searched", "")
+            if not part_name:
+                continue
+            n = 0
+            product = entry.get("product") or entry.get("product_scraped")
+            if product and product.get("brand") and product.get("reference"):
+                n += 1
+            n += len(_extract_oe_refs(entry.get("specs", {})))
+            for eq in entry.get("equivalents", []) or []:
+                if eq.get("brand") and eq.get("reference"):
+                    n += 1
+            for xr in entry.get("cross_references", []) or []:
+                if xr.get("brand") and xr.get("reference"):
+                    n += 1
+            expected_counts[vehicle_id] = expected_counts.get(vehicle_id, 0) + n
+
+        # Get actual ref counts from DB
+        db_counts_rows = await conn.fetch(
+            "SELECT vehicle_id, COUNT(*) AS cnt FROM part_references GROUP BY vehicle_id"
+        )
+        db_counts = {r["vehicle_id"]: r["cnt"] for r in db_counts_rows}
+
+        changed_vehicles = {
+            vid for vid, expected in expected_counts.items()
+            if db_counts.get(vid, 0) != expected
+        }
+        if not changed_vehicles:
+            print(f"Seeded {len(vehicle_rows)} vehicles, 0 new references (all up to date)")
+            return
+
+        print(f"{len(changed_vehicles)} vehicles have new references, collecting...")
+
+        ref_rows: list[tuple] = []
+        for entry in data:
+            v_dict = entry.get("vehicle")
+            if not isinstance(v_dict, dict):
+                continue
+            vehicle_name = v_dict.get("raw_vehicle", "")
+            if not vehicle_name or vehicle_name not in seen_vehicles:
+                continue
+            vehicle_id = seen_vehicles[vehicle_name]
+            if vehicle_id not in changed_vehicles:
+                continue
+            part_name = entry.get("part") or entry.get("part_searched", "")
             if not part_name:
                 continue
 
-            product = entry.get("product_scraped")
+            product = entry.get("product") or entry.get("product_scraped")
             if product and product.get("brand") and product.get("reference"):
                 ref_rows.append((
                     vehicle_id, part_name, product["brand"],
@@ -213,17 +199,44 @@ async def seed_vehicles():
                         False, xr.get("price_eur"), "cross_reference",
                     ))
 
-        # Phase 3: batch insert refs with executemany
-        if ref_rows:
-            await conn.executemany(
-                """
-                INSERT INTO part_references (vehicle_id, part_name, brand, reference, is_oe, price_eur, source)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                ON CONFLICT DO NOTHING
-                """,
-                ref_rows,
-            )
-
-        print(f"Seeded {len(seen_vehicles)} vehicles, {len(ref_rows)} references")
+        print(f"Seeded {len(vehicle_rows)} vehicles")
     finally:
         await conn.close()
+
+    # Phase 3: insert refs in chunks with fresh connections (Supabase drops long ones)
+    CHUNK = 10_000
+    print(f"Inserting {len(ref_rows)} references in chunks of {CHUNK}...")
+    cols = ["vehicle_id", "part_name", "brand", "reference", "is_oe", "price_eur", "source"]
+    for i in range(0, len(ref_rows), CHUNK):
+        chunk = ref_rows[i:i + CHUNK]
+        for attempt in range(3):
+            try:
+                c = await asyncpg.connect(DATABASE_URL, statement_cache_size=0)
+                try:
+                    await c.execute("SET statement_timeout = '0'")
+                    await c.execute("DROP TABLE IF EXISTS _rstg")
+                    await c.execute("""
+                        CREATE TEMP TABLE _rstg (
+                            vehicle_id INT, part_name TEXT, brand TEXT, reference TEXT,
+                            is_oe BOOLEAN, price_eur FLOAT, source TEXT
+                        )
+                    """)
+                    await c.copy_records_to_table("_rstg", records=chunk, columns=cols)
+                    await c.execute("""
+                        INSERT INTO part_references (vehicle_id, part_name, brand, reference, is_oe, price_eur, source)
+                        SELECT vehicle_id, part_name, brand, reference, is_oe, price_eur, source
+                        FROM _rstg ON CONFLICT DO NOTHING
+                    """)
+                finally:
+                    await c.close()
+                break
+            except (asyncpg.exceptions.ConnectionDoesNotExistError,
+                    asyncpg.exceptions.QueryCanceledError) as e:
+                if attempt < 2:
+                    print(f"  chunk {i} attempt {attempt+1} failed ({e}), retrying...")
+                    await asyncio.sleep(2)
+                else:
+                    raise
+        print(f"  {min(i + CHUNK, len(ref_rows))}/{len(ref_rows)}")
+
+    print(f"Seeded {len(vehicle_rows)} vehicles, {len(ref_rows)} references")

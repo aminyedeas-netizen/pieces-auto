@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS part_vehicle_compatibility (
     id SERIAL PRIMARY KEY,
     reference_id INTEGER REFERENCES part_references(id),
     compatible_vehicle_name VARCHAR NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(reference_id, compatible_vehicle_name)
 );
 
 -- Screenshots stored locally

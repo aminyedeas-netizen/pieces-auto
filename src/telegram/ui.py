@@ -33,6 +33,12 @@ import unicodedata
 from telegram import InlineKeyboardButton
 
 
+def escape_md(text: str) -> str:
+    """Escape special characters for Telegram MarkdownV2."""
+    special = r"_*[]()~`>#+-=|{}.!"
+    return "".join(f"\\{c}" if c in special else c for c in text)
+
+
 def _strip_diacritics(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
@@ -44,15 +50,40 @@ _BODY_NOISE_RE = re.compile(
 _TRAILING_SLASH_RE = re.compile(r"\s+/\s+")
 _MULTISPACE_RE = re.compile(r"\s{2,}")
 
+# Verbose body-style words compressed to short forms. Applied as whole-word
+# substitutions so "Sportback" becomes "Sportb." but "Sportbacker" (not a
+# real token, but safe anyway) would not.
+_BODY_ABBREVIATIONS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"\bSportback\b", re.IGNORECASE), "Sportb."),
+    (re.compile(r"\bCabriolet\b", re.IGNORECASE), "Cabr."),
+    (re.compile(r"\bBerline\b", re.IGNORECASE), "Berl."),
+    (re.compile(r"\bCoup[eé]\b", re.IGNORECASE), "Coup."),
+    (re.compile(r"\bRoadster\b", re.IGNORECASE), "Road."),
+    (re.compile(r"\bAllroad\b", re.IGNORECASE), "Allr."),
+    (re.compile(r"\bCitycarver\b", re.IGNORECASE), "Citycrv."),
+    (re.compile(r"\ballstreet\b", re.IGNORECASE), "allstr."),
+]
 
-def format_model_label(brand: str, model: str, max_len: int = 24) -> str:
+
+def model_family(model: str) -> str:
+    """Return the model's family root (first token), e.g. 'A3 Sportback (8VA)' -> 'A3'.
+
+    Used to group many variants of the same family under one picker entry so
+    users tap 'A3' once, then pick the body / chassis variant.
+    """
+    parts = model.strip().split()
+    return parts[0] if parts else model
+
+
+def format_model_label(brand: str, model: str, max_len: int = 30) -> str:
     """Render a model name as a clean Telegram button label.
 
     - Strips redundant leading brand prefix (case/diacritics-insensitive).
     - Removes verbose body-style noise like "/ 3/5 portes".
+    - Abbreviates long body-style words (Sportback -> Sportb., etc.).
     - Normalizes inconsistent casing (PA24 mixes "Citroën" / "CITROËN").
     - Uppercases short lowercase trailing chassis tokens ("Picanto ba" -> "BA").
-    - Mid-truncates if still too long so chassis code in parens is preserved.
+    - End-truncates cleanly if still too long.
     """
     label = model.strip()
     brand_norm = _strip_diacritics(brand).lower()
@@ -60,6 +91,8 @@ def format_model_label(brand: str, model: str, max_len: int = 24) -> str:
     if label_norm.startswith(brand_norm + " "):
         label = label.split(" ", 1)[1] if " " in label else label
     label = _BODY_NOISE_RE.sub("", label)
+    for pat, repl in _BODY_ABBREVIATIONS:
+        label = pat.sub(repl, label)
     label = _TRAILING_SLASH_RE.sub(" ", label)
     label = _MULTISPACE_RE.sub(" ", label).strip(" /-")
     parts = label.split()
@@ -67,11 +100,101 @@ def format_model_label(brand: str, model: str, max_len: int = 24) -> str:
         parts[-1] = parts[-1].upper()
         label = " ".join(parts)
     if len(label) > max_len:
-        keep = max_len - 1
-        head = label[: keep // 2]
-        tail = label[-(keep - len(head)) :]
-        label = f"{head}…{tail}"
+        label = label[: max_len - 1].rstrip() + "…"
     return label
+
+
+def adaptive_grid(
+    items: list[tuple[str, str]],
+    threshold: int = 22,
+) -> list[list[InlineKeyboardButton]]:
+    """Lay out (label, callback_data) tuples in 1 or 2 columns depending on length.
+
+    Two columns when every label is short (<= threshold chars), one column
+    otherwise. Avoids the cramped look you get when mixing long labels into a
+    fixed 2-column grid.
+    """
+    one_col = any(len(label) > threshold for label, _ in items)
+    cols = 1 if one_col else 2
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for label, cb in items:
+        row.append(InlineKeyboardButton(label, callback_data=cb))
+        if len(row) == cols:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    return rows
+
+
+def group_families(models: list[str]) -> dict[str, list[int]]:
+    """Map family root -> list of original indices into `models`, preserving order."""
+    out: dict[str, list[int]] = {}
+    for i, m in enumerate(models):
+        out.setdefault(model_family(m), []).append(i)
+    return out
+
+
+def should_group_by_family(models: list[str]) -> bool:
+    """True when the model list is big enough that a family picker helps."""
+    if len(models) <= 6:
+        return False
+    groups = group_families(models)
+    if len(groups) < 2:
+        return False
+    return any(len(v) >= 2 for v in groups.values())
+
+
+def render_model_keyboard(
+    brand: str,
+    models: list[str],
+    item_prefix: str,
+    family_prefix: str,
+    back_cb: str | None = None,
+    extra_rows: list[list[InlineKeyboardButton]] | None = None,
+) -> tuple[list[list[InlineKeyboardButton]], bool]:
+    """Render a model picker. Returns (keyboard, used_families).
+
+    If many models share families, show one button per family; otherwise flat.
+    Callbacks use `{family_prefix}:<family_name>` for family buttons and
+    `{item_prefix}:<i>` for individual models, where i is the index into
+    the original `models` list.
+    """
+    use_families = should_group_by_family(models)
+    if use_families:
+        groups = group_families(models)
+        items: list[tuple[str, str]] = []
+        for fam in sorted(groups.keys()):
+            count = len(groups[fam])
+            label = f"{fam} ({count})" if count > 1 else fam
+            items.append((label, f"{family_prefix}:{fam}"))
+        rows = adaptive_grid(items)
+    else:
+        items = [(format_model_label(brand, m), f"{item_prefix}:{i}") for i, m in enumerate(models)]
+        rows = adaptive_grid(items)
+    if back_cb:
+        rows.append([InlineKeyboardButton("\u2B05 Retour", callback_data=back_cb)])
+    if extra_rows:
+        rows.extend(extra_rows)
+    return rows, use_families
+
+
+def render_variants_keyboard(
+    brand: str,
+    models: list[str],
+    indices: list[int],
+    item_prefix: str,
+    back_cb: str,
+    extra_rows: list[list[InlineKeyboardButton]] | None = None,
+) -> list[list[InlineKeyboardButton]]:
+    """Render variants of one family. Callbacks are `{item_prefix}:<i>` (original index)."""
+    items = [(format_model_label(brand, models[i]), f"{item_prefix}:{i}") for i in indices]
+    rows = adaptive_grid(items)
+    rows.append([InlineKeyboardButton("\u2B05 Retour", callback_data=back_cb)])
+    if extra_rows:
+        rows.extend(extra_rows)
+    return rows
 
 
 def format_year_label(year_start: int | None, year_end: int | None) -> str:
@@ -271,6 +394,75 @@ def build_parts_keyboard(
 
     if tail_rows:
         keyboard.extend(tail_rows)
+    return keyboard
+
+
+def categorize_parts(parts: list[str]) -> list[tuple[int, str, list[int]]]:
+    """Group parts into categories. Returns (cat_idx, cat_name, part_indices) for non-empty cats."""
+    groups: dict[int, list[int]] = {}
+    for i, p in enumerate(parts):
+        groups.setdefault(_categorize(p), []).append(i)
+
+    result = []
+    category_order = list(range(len(PART_CATEGORIES))) + [len(PART_CATEGORIES)]
+    for cat_idx in category_order:
+        if cat_idx not in groups:
+            continue
+        title = PART_CATEGORIES[cat_idx][0] if cat_idx < len(PART_CATEGORIES) else "Autres"
+        result.append((cat_idx, title, groups[cat_idx]))
+    return result
+
+
+def build_category_keyboard(
+    parts: list[str],
+    cat_prefix: str,
+    back_cb: str | None = None,
+) -> list[list[InlineKeyboardButton]]:
+    """Show category buttons with part count, e.g. 'Freinage (4)'."""
+    cats = categorize_parts(parts)
+    if len(cats) <= 1:
+        # Single category — skip straight to parts (caller should handle)
+        return []
+    keyboard = []
+    for cat_idx, title, indices in cats:
+        label = f"{title} ({len(indices)})"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"{cat_prefix}:{cat_idx}")])
+    if back_cb:
+        keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data=back_cb)])
+    return keyboard
+
+
+def build_category_parts_keyboard(
+    parts: list[str],
+    cat_idx: int,
+    part_prefix: str,
+    back_cb: str,
+) -> list[list[InlineKeyboardButton]]:
+    """Show parts within a single category."""
+    cats = categorize_parts(parts)
+    indices = []
+    for ci, _, idxs in cats:
+        if ci == cat_idx:
+            indices = idxs
+            break
+    keyboard: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for i in indices:
+        label = parts[i] if len(parts[i]) <= 38 else parts[i][:37] + "..."
+        btn = InlineKeyboardButton(label, callback_data=f"{part_prefix}:{i}")
+        if len(label) > 28:
+            if row:
+                keyboard.append(row)
+                row = []
+            keyboard.append([btn])
+            continue
+        row.append(btn)
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("\u2B05 Retour", callback_data=back_cb)])
     return keyboard
 
 

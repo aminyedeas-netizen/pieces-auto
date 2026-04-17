@@ -30,6 +30,13 @@ async def get_scraper() -> CDGScraper:
     return _scraper
 
 
+async def close_scraper() -> None:
+    global _scraper
+    if _scraper:
+        await _scraper.close()
+        _scraper = None
+
+
 async def search_reference(reference: str) -> str:
     """Search a single reference directly on CDG. No vehicle needed."""
     if is_known_not_found(reference):
@@ -83,11 +90,17 @@ async def search_reference(reference: str) -> str:
     return "\n".join(lines)
 
 
-async def search_part(vehicle_id: int, vehicle_name: str, part_name: str) -> str:
-    """Full chain: DB lookup -> CDG search all refs -> formatted result."""
-    from src.db.repository import lookup_references
+async def search_part(vehicle_id: int | list[int], vehicle_name: str, part_name: str) -> str:
+    """Full chain: DB lookup -> CDG search all refs -> formatted result.
 
-    refs = await lookup_references(vehicle_id, part_name)
+    vehicle_id can be a single int or a list of ints (grouped motorisations).
+    """
+    if isinstance(vehicle_id, list):
+        from src.db.repository import lookup_references_multi
+        refs = await lookup_references_multi(vehicle_id, part_name)
+    else:
+        from src.db.repository import lookup_references
+        refs = await lookup_references(vehicle_id, part_name)
 
     if not refs:
         await _notify_operator_refs_missing(vehicle_name, part_name)
@@ -217,10 +230,7 @@ def _format_cdg_results(
     return "\n".join(lines)
 
 
-def _escape_md(text: str) -> str:
-    """Escape MarkdownV2 special characters."""
-    special = r"_*[]()~`>#+-=|{}.!"
-    return "".join(f"\\{c}" if c in special else c for c in text)
+from src.telegram.ui import escape_md as _escape_md
 
 
 async def _notify_operator_refs_missing(vehicle_name: str, part_name: str) -> None:

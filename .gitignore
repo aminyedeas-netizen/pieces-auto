@@ -17,3 +17,14 @@ wheels/
 
 # Local Claude Code settings
 .claude/
+
+# Large data files (seeded to DB, not needed in repo)
+data/database.json
+data/cdg_stock_results.json
+data/cdg_screenshots/
+data/pa24_cache/
+data/batch_results.log
+data/searched_references.json
+data/project_guide*.pdf
+data/project_guide*.html
+data/cdg_report*.html
