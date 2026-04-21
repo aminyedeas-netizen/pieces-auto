@@ -61,6 +61,7 @@ src/
   __main__.py          — CLI entry point (decode-vin, init-db, seed, stats, serve)
   main.py              — asyncio.run(_serve()) starts both bots + seeds DB
   chain.py             — orchestrator: DB refs -> CDG search -> format results
+  part_aliases.py      — part name alias table + resolve/variant helpers
   db/
     models.py          — dataclasses: Vehicle, StoredReference, CDGResult, etc.
     repository.py      — asyncpg pool, all DB queries (CRUD for 6 tables)
@@ -69,11 +70,14 @@ src/
   interpreter/
     llm.py             — OpenRouter LLM calls (vision + text), parse_vehicle_query()
   scraper/
-    cdg.py             — Playwright headless browser, CDG login/search/parse
+    cdg.py             — Playwright headless browser, CDG login/search/parse + designation fallback
+    pa24.py            — PA24 scraper via CDP (Chrome port 9222), search + extract + save
     catalog_cache.py   — reads cdg_stock_results.json to skip known-not-found refs
   telegram/
     operator_bot.py    — all operator bot handlers and commands
     client_bot.py      — all client bot handlers and commands
+    ai_layer.py        — LLM conversation layer (system prompt, tool declarations, handle_message)
+    ai_functions.py    — tool function implementations (search_parts, search_cdg, propose_pa24_add, etc.)
     ui.py              — shared UI: keyboard builders, label formatters, escape_md
   vin/
     decoder.py         — VIN decoding (WMI, year, PSA engine code, JSON fallback)
@@ -122,12 +126,39 @@ Each entry has:
 4. Compares ref counts per vehicle (DB vs database.json) — skips unchanged vehicles
 5. Inserts only new refs in 10k-row chunks with fresh connections + retry (handles Supabase connection drops)
 
+### Part Name Aliases (src/part_aliases.py)
+- `PART_ALIASES` maps standard DB names to customer/mechanic aliases (franco-arabic, misspellings, CDG names)
+- `resolve_part_name(input)` normalizes user input to DB name before any query (accent-insensitive)
+- `get_cdg_variants(name)` returns all alias variants for CDG designation search
+- Applied in: `search_parts()`, `search_cdg()`, `chain.search_part()`, CDG `_fuzzy_part_names()`
+- Examples: "pompe essence" -> "Pompe a carburant", "bouji" -> "Bougie d'allumage", "plakat frin avant" -> "Plaquettes de frein avant"
+
 ### CDG Search Flow
-1. User selects vehicle + part -> DB query returns references
-2. References split via catalog_cache: skip known-not-found, search the rest
-3. CDG scraper searches each ref (with asyncio.Lock for concurrency)
-4. Results formatted: available (with price), rupture, non-ref sections
-5. Operator notified if no refs exist in DB for requested vehicle+part
+1. User selects vehicle + part -> part name resolved via aliases -> DB query returns references (OE refs first, then aftermarket)
+2. References normalized (strip spaces/dashes/dots) before CDG search. Tries normalized first, original as fallback.
+3. References split via catalog_cache: skip known-not-found, search the rest
+4. CDG scraper searches each ref via #A20 (Trouver la reference) with asyncio.Lock
+5. If NO results from reference search, **designation fallback**:
+   - Search CDG by part name via #A33 (Trouver la designation)
+   - Tries all alias variants first (e.g. "Pompe a carburant" also tries "pompe essence", "pompe gasoil", etc.)
+   - Then fuzzy fallbacks: without filler words, first word only
+   - Cross-reference CDG results against our OE refs: if a CDG result description contains one of our OE codes (normalized), it's a match
+   - Return that CDG reference with price/availability
+6. Results formatted: available (with price), rupture, non-ref sections
+7. Operator notified if no refs exist in DB for requested vehicle+part
+
+### PA24 Scraping (chatbot "ajouter" command)
+- Uses CDP connection to a running Chrome instance (port 9222) to bypass Cloudflare
+- Two modes:
+  A) By reference: `propose_pa24_add(reference="560118")` — searches PA24 directly
+  B) By vehicle+part: `propose_pa24_add(brand, model, part_name)` — first validates vehicle from DB (returns CHOICES of motorisations), then searches PA24 with validated vehicle name + part
+- Two-step confirmation: preview first (`propose_pa24_add`), save only after user confirms (`confirm_pa24_add`)
+- Search uses the homepage search field (not URL params — URL-based search is unreliable with CDP)
+- Extraction happens while on the product page (no second navigation)
+- Results cached 5min to prevent duplicate scrapes if LLM calls the function twice
+- HTML parsing with BeautifulSoup: product info, specs, equivalents, cross-refs, OE refs (#oem section), compatible vehicles (#compatibility section with data-toggle-maker accordions)
+- Saves one DB entry per compatible vehicle found on the page
+- Also appends to data/database.json so data survives re-seed
 
 ## Environment Variables
 ```
@@ -184,7 +215,7 @@ Both bots use Fuel > Motorisation (not Year > Engine):
 ## Current State (April 2026)
 
 ### Database
-- 6,000+ vehicles, ~1,000,000+ references (seeded from data/database.json)
+- 10,000+ vehicles, ~100,000+ references (seeded from data/database.json)
 - database.json maintained in a separate Claude Code session, growing continuously
 
 ### Known Limitations
@@ -192,6 +223,7 @@ Both bots use Fuel > Motorisation (not Year > Engine):
 - In-memory sessions lost on bot restart (acceptable for now)
 - `/ajouter_ref` creates vehicles from LLM-scraped names which may not match PA24 naming exactly — can cause near-duplicates in the vehicles table. Design fix: select vehicle from DB buttons instead of LLM-generated names.
 - CDG stock check script and bot scraper can race on cdg_stock_results.json reads (mitigated: partial read falls back to existing cache instead of clearing)
+- PA24 scraping requires a Chrome instance running with `--remote-debugging-port=9222` (Cloudflare blocks headless Playwright)
 
 ### Build Progress
 - [x] Steps 1-16: Full platform implemented (both bots, all commands, CDG scraper, UI improvements)
@@ -200,3 +232,8 @@ Both bots use Fuel > Motorisation (not Year > Engine):
 - [x] Step 19: Vehicle selection rewrite (Fuel > Motorisation instead of Year > Engine)
 - [x] Step 20: Part category intermediary step (both bots)
 - [x] Step 21: Incremental seed with COPY + chunking + retry
+- [x] Step 22: AI chatbot layer (operator bot free-text, LLM function calling, system prompt)
+- [x] Step 23: PA24 chatbot scraping ("ajouter [ref]" — search + extract + save in one call)
+- [x] Step 24: CDG designation fallback (fuzzy part name search + OE cross-reference)
+- [x] Step 25: Part name aliases (normalize customer/mechanic slang to DB names, CDG variant search)
+- [x] Step 26: PA24 vehicle+part search (validate vehicle from DB before PA24 search, CHOICES flow)

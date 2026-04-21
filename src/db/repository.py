@@ -506,8 +506,8 @@ async def get_distinct_models(brand: str) -> list[str]:
 async def get_vehicles_for_model(brand: str, model: str) -> list[Vehicle]:
     """Get all vehicle variants for a brand+model (different engines).
 
-    Matches the model exactly OR any model that starts with `model + " "`,
-    so engine-suffixed variants stored in the model column are included.
+    Matches the model exactly, prefix, or substring (for chassis codes like R56
+    embedded in longer model names).
     """
     conn = await _get_conn()
     try:
@@ -518,7 +518,8 @@ async def get_vehicles_for_model(brand: str, model: str) -> list[Vehicle]:
                    engine_code, pa24_full_name
             FROM vehicles
             WHERE LOWER(brand) = LOWER($1)
-              AND (LOWER(model) = LOWER($2) OR LOWER(model) LIKE LOWER($2) || ' %')
+              AND (LOWER(model) = LOWER($2) OR LOWER(model) LIKE LOWER($2) || ' %'
+                   OR LOWER(model) LIKE '%' || LOWER($2) || '%')
             ORDER BY year_start, engine_code
             """,
             brand,
@@ -627,6 +628,106 @@ async def get_motorisations(brand: str, model: str, fuel: str | None = None) -> 
         await _release(conn)
 
 
+async def get_year_range_for_model(brand: str, model: str) -> tuple[int | None, int | None]:
+    """Min year_start and max year_end for a brand+model."""
+    conn = await _get_conn()
+    try:
+        row = await conn.fetchrow(
+            """
+            SELECT MIN(year_start) AS min_year, MAX(year_end) AS max_year
+            FROM vehicles
+            WHERE LOWER(brand) = LOWER($1)
+              AND (LOWER(model) = LOWER($2) OR LOWER(model) LIKE LOWER($2) || ' %')
+            """,
+            brand, model,
+        )
+        return (row["min_year"], row["max_year"]) if row else (None, None)
+    finally:
+        await _release(conn)
+
+
+async def get_fuels_for_model_years(
+    brand: str, model: str, year_min: int, year_max: int,
+) -> list[str]:
+    """Distinct fuel types filtered by year range."""
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT fuel FROM vehicles
+            WHERE LOWER(brand) = LOWER($1)
+              AND (LOWER(model) = LOWER($2) OR LOWER(model) LIKE LOWER($2) || ' %')
+              AND fuel IS NOT NULL AND fuel != ''
+              AND year_start <= $4 AND (year_end >= $3 OR year_end IS NULL)
+            ORDER BY fuel
+            """,
+            brand, model, year_min, year_max,
+        )
+        return [r["fuel"] for r in rows]
+    finally:
+        await _release(conn)
+
+
+async def get_motorisations_for_years(
+    brand: str, model: str, fuel: str | None, year_min: int, year_max: int,
+) -> list[dict]:
+    """Distinct motorisations filtered by year range."""
+    conn = await _get_conn()
+    try:
+        if fuel:
+            rows = await conn.fetch(
+                """
+                SELECT DISTINCT displacement, power_hp, fuel
+                FROM vehicles
+                WHERE LOWER(brand) = LOWER($1)
+                  AND (LOWER(model) = LOWER($2) OR LOWER(model) LIKE LOWER($2) || ' %')
+                  AND LOWER(fuel) = LOWER($3)
+                  AND year_start <= $5 AND (year_end >= $4 OR year_end IS NULL)
+                ORDER BY displacement, power_hp
+                """,
+                brand, model, fuel, year_min, year_max,
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT DISTINCT displacement, power_hp, fuel
+                FROM vehicles
+                WHERE LOWER(brand) = LOWER($1)
+                  AND (LOWER(model) = LOWER($2) OR LOWER(model) LIKE LOWER($2) || ' %')
+                  AND year_start <= $4 AND (year_end >= $3 OR year_end IS NULL)
+                ORDER BY displacement, power_hp
+                """,
+                brand, model, year_min, year_max,
+            )
+        return [dict(r) for r in rows]
+    finally:
+        await _release(conn)
+
+
+async def get_vehicle_ids_for_motorisation_years(
+    brand: str, model: str, fuel: str, displacement: str, power_hp: int,
+    year_min: int, year_max: int,
+) -> list[int]:
+    """Vehicle IDs matching motorisation + year range."""
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT id FROM vehicles
+            WHERE LOWER(brand) = LOWER($1)
+              AND (LOWER(model) = LOWER($2) OR LOWER(model) LIKE LOWER($2) || ' %')
+              AND LOWER(fuel) = LOWER($3)
+              AND displacement = $4
+              AND power_hp = $5
+              AND year_start <= $7 AND (year_end >= $6 OR year_end IS NULL)
+            """,
+            brand, model, fuel, displacement, power_hp, year_min, year_max,
+        )
+        return [r["id"] for r in rows]
+    finally:
+        await _release(conn)
+
+
 async def get_vehicle_ids_for_motorisation(
     brand: str, model: str, fuel: str, displacement: str, power_hp: int,
 ) -> list[int]:
@@ -688,7 +789,7 @@ async def get_parts_for_vehicles(vehicle_ids: list[int]) -> list[str]:
 
 
 async def search_parts_fuzzy(vehicle_id: int, query: str) -> list[str]:
-    """Find part names for a vehicle that contain the query string."""
+    """Find part names for a vehicle matching the query (substring or word match)."""
     conn = await _get_conn()
     try:
         rows = await conn.fetch(
@@ -699,19 +800,39 @@ async def search_parts_fuzzy(vehicle_id: int, query: str) -> list[str]:
             """,
             vehicle_id, query,
         )
+        if rows:
+            return [r["part_name"] for r in rows]
+
+        words = [w for w in query.lower().split() if len(w) >= 3]
+        if not words:
+            return []
+        conditions = " OR ".join(f"LOWER(part_name) LIKE '%' || ${i+2} || '%'" for i in range(len(words)))
+        rows = await conn.fetch(
+            f"""
+            SELECT DISTINCT part_name FROM part_references
+            WHERE vehicle_id = $1
+              AND ({conditions})
+            ORDER BY part_name
+            """,
+            vehicle_id, *words,
+        )
         return [r["part_name"] for r in rows]
     finally:
         await _release(conn)
 
 
 async def search_parts_fuzzy_multi(vehicle_ids: list[int], query: str) -> list[str]:
-    """Find part names across multiple vehicles that contain the query string."""
+    """Find part names across multiple vehicles matching the query.
+
+    Tries exact substring first, then matches parts containing ALL query words.
+    """
     if not vehicle_ids:
         return []
     if len(vehicle_ids) == 1:
         return await search_parts_fuzzy(vehicle_ids[0], query)
     conn = await _get_conn()
     try:
+        # Try exact substring first
         rows = await conn.fetch(
             """
             SELECT DISTINCT part_name FROM part_references
@@ -720,6 +841,24 @@ async def search_parts_fuzzy_multi(vehicle_ids: list[int], query: str) -> list[s
             ORDER BY part_name
             """,
             vehicle_ids, query,
+        )
+        if rows:
+            return [r["part_name"] for r in rows]
+
+        # Split query into words and match parts containing ANY word
+        words = [w for w in query.lower().split() if len(w) >= 3]
+        if not words:
+            return []
+        # Build: LOWER(part_name) LIKE '%word1%' OR LOWER(part_name) LIKE '%word2%'
+        conditions = " OR ".join(f"LOWER(part_name) LIKE '%' || ${i+2} || '%'" for i in range(len(words)))
+        rows = await conn.fetch(
+            f"""
+            SELECT DISTINCT part_name FROM part_references
+            WHERE vehicle_id = ANY($1::int[])
+              AND ({conditions})
+            ORDER BY part_name
+            """,
+            vehicle_ids, *words,
         )
         return [r["part_name"] for r in rows]
     finally:
@@ -744,6 +883,153 @@ async def lookup_references_multi(vehicle_ids: list[int], part_name: str) -> lis
             ORDER BY brand, reference, is_oe DESC
             """,
             vehicle_ids, part_name,
+        )
+        return [
+            StoredReference(
+                id=r["id"], vehicle_id=r["vehicle_id"],
+                part_name=r["part_name"], brand=r["brand"],
+                reference=r["reference"], is_oe=r["is_oe"],
+                price_eur=r["price_eur"], source=r["source"],
+            )
+            for r in rows
+        ]
+    finally:
+        await _release(conn)
+
+
+# ---------------------------------------------------------------------------
+# AI layer queries
+# ---------------------------------------------------------------------------
+
+
+async def search_vehicles_flexible(
+    brand: str,
+    model: str,
+    fuel: str | None = None,
+    power_hp: int | None = None,
+) -> list[Vehicle]:
+    """Search vehicles with optional fuel and approximate power (+/-5 CV)."""
+    import re as _re
+    # Strip "Serie"/"Série" prefix (BMW Serie 3 -> 3)
+    clean_model = _re.sub(r'^[Ss][eé]rie\s+', '', model).strip()
+
+    conn = await _get_conn()
+    try:
+        conditions = [
+            "LOWER(brand) = LOWER($1)",
+            """(LOWER(model) = LOWER($2)
+               OR LOWER(model) LIKE LOWER($2) || ' %'
+               OR LOWER(model) LIKE '%' || LOWER($2) || '%'
+               OR LOWER(TRANSLATE(model, 'àâäéèêëïîôùûüçÀÂÄÉÈÊËÏÎÔÙÛÜÇ', 'aaaeeeeiioouucAAAEEEEIIOOUUC')) LIKE '%' || LOWER(TRANSLATE($2, 'àâäéèêëïîôùûüçÀÂÄÉÈÊËÏÎÔÙÛÜÇ', 'aaaeeeeiioouucAAAEEEEIIOOUUC')) || '%')""",
+        ]
+        params: list = [brand, clean_model]
+        idx = 3
+
+        if fuel:
+            conditions.append(f"LOWER(fuel) = LOWER(${idx})")
+            params.append(fuel)
+            idx += 1
+
+        if power_hp is not None:
+            conditions.append(f"power_hp BETWEEN (${idx} - 5) AND (${idx} + 5)")
+            params.append(power_hp)
+            idx += 1
+
+        where = " AND ".join(conditions)
+        rows = await conn.fetch(
+            f"""
+            SELECT id, brand, model, chassis_code, displacement,
+                   power_hp, fuel, year_start, year_end,
+                   engine_code, pa24_full_name
+            FROM vehicles
+            WHERE {where}
+            ORDER BY power_hp, year_start
+            """,
+            *params,
+        )
+        return [_row_to_vehicle(r) for r in rows]
+    finally:
+        await _release(conn)
+
+
+async def search_reference_in_db(reference: str) -> list[dict]:
+    """Find a reference code across all vehicles. Returns dicts with vehicle info."""
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT pr.id, pr.vehicle_id, pr.part_name, pr.brand, pr.reference,
+                   pr.is_oe, pr.price_eur, pr.source,
+                   v.brand AS v_brand, v.model AS v_model, v.displacement,
+                   v.power_hp, v.fuel, v.engine_code, v.pa24_full_name
+            FROM part_references pr
+            JOIN vehicles v ON v.id = pr.vehicle_id
+            WHERE UPPER(pr.reference) = UPPER($1)
+            ORDER BY v.brand, v.model
+            """,
+            reference,
+        )
+        return [dict(r) for r in rows]
+    finally:
+        await _release(conn)
+
+
+async def get_compatible_vehicles_for_ref(reference: str) -> list[str]:
+    """Get compatible vehicle names for a reference from part_vehicle_compatibility."""
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT pvc.compatible_vehicle_name
+            FROM part_vehicle_compatibility pvc
+            JOIN part_references pr ON pr.id = pvc.reference_id
+            WHERE UPPER(pr.reference) = UPPER($1)
+            ORDER BY pvc.compatible_vehicle_name
+            """,
+            reference,
+        )
+        return [r["compatible_vehicle_name"] for r in rows]
+    finally:
+        await _release(conn)
+
+
+async def get_coverage_for_vehicle(vehicle_ids: list[int]) -> list[dict]:
+    """Get part coverage: part_name + ref count for given vehicle IDs."""
+    if not vehicle_ids:
+        return []
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT part_name, COUNT(*) as ref_count
+            FROM part_references
+            WHERE vehicle_id = ANY($1::int[])
+            GROUP BY part_name
+            ORDER BY part_name
+            """,
+            vehicle_ids,
+        )
+        return [dict(r) for r in rows]
+    finally:
+        await _release(conn)
+
+
+async def get_other_references(
+    vehicle_id: int, part_name: str, exclude_ref: str,
+) -> list[StoredReference]:
+    """Get other references for same vehicle+part, excluding one reference code."""
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT id, vehicle_id, part_name, brand, reference, is_oe,
+                   price_eur, source
+            FROM part_references
+            WHERE vehicle_id = $1 AND LOWER(part_name) = LOWER($2)
+              AND UPPER(reference) != UPPER($3)
+            ORDER BY is_oe DESC, brand
+            """,
+            vehicle_id, part_name, exclude_ref,
         )
         return [
             StoredReference(

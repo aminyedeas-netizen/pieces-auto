@@ -3,6 +3,8 @@
 import asyncio
 import logging
 import os
+import re
+import unicodedata
 
 from playwright.async_api import async_playwright
 from dotenv import load_dotenv
@@ -14,6 +16,63 @@ load_dotenv()
 log = logging.getLogger(__name__)
 
 CDG_URL = os.environ.get("CDG_URL", "http://www.cdgros.com/Site_CDG25")
+
+
+def _normalize_for_cdg(ref: str) -> str:
+    """Strip separators (spaces, dashes, dots, slashes) for CDG search.
+
+    Same characters in same order — only formatting removed.
+    "560 118" -> "560118", "FAE-77134" -> "FAE77134"
+    """
+    return ref.replace(" ", "").replace("-", "").replace(".", "").replace("/", "").strip()
+
+
+def _normalize_ref(ref: str) -> str:
+    """Normalize a reference for comparison. Same as _normalize_for_cdg but uppercased."""
+    return _normalize_for_cdg(ref).upper()
+
+
+def _strip_accents(s: str) -> str:
+    return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode()
+
+
+# Common filler words to strip when building fuzzy search variants
+_FILLER = {"de", "du", "des", "le", "la", "les", "a", "au", "aux", "en", "et", "d"}
+
+
+def _fuzzy_part_names(part_name: str) -> list[str]:
+    """Generate search variants for a part name.
+
+    Uses alias table first, then fuzzy fallbacks:
+    1. All known aliases for the part (from PART_ALIASES)
+    2. Original (stripped accents, uppercased)
+    3. Without filler words ("Kit de distribution" -> "KIT DISTRIBUTION")
+    4. First meaningful word only ("Amortisseur" from "Amortisseur avant")
+    """
+    from src.part_aliases import get_cdg_variants
+
+    # Start with alias variants (includes the standard name)
+    alias_variants = get_cdg_variants(part_name)
+
+    clean = _strip_accents(part_name).upper().strip()
+    variants = list(alias_variants)
+    if clean not in variants:
+        variants.append(clean)
+
+    # Without fillers
+    words = clean.split()
+    meaningful = [w for w in words if w.lower() not in _FILLER and len(w) > 1]
+    no_filler = " ".join(meaningful)
+    if meaningful and no_filler not in variants:
+        variants.append(no_filler)
+
+    # First word only (if multi-word)
+    if len(meaningful) > 1 and meaningful[0] not in variants:
+        variants.append(meaningful[0])
+
+    return variants
+
+
 CDG_LOGIN = os.environ.get("CDG_LOGIN", "")
 CDG_PASSWORD = os.environ.get("CDG_PASSWORD", "")
 
@@ -59,7 +118,19 @@ class CDGScraper:
             await self._login()
 
     async def search(self, reference: str) -> list[CDGResult]:
-        """Search for a single reference. Serialized via lock."""
+        """Search for a single reference. Serialized via lock.
+
+        Tries normalized form first (no spaces/dashes/dots), then original
+        if different and first attempt returned nothing.
+        """
+        normalized = _normalize_for_cdg(reference)
+        results = await self._search_once(normalized)
+        if not results and normalized != reference:
+            results = await self._search_once(reference)
+        return results
+
+    async def _search_once(self, reference: str) -> list[CDGResult]:
+        """Single CDG search attempt for a reference string."""
         async with self._lock:
             await self._ensure_session()
 
@@ -70,7 +141,6 @@ class CDGScraper:
             await self._page.keyboard.press("Enter")
             await self._page.wait_for_timeout(4000)
 
-            # Check session again after navigation
             title = await self._page.title()
             if "Login" in title:
                 log.warning("CDG session expired during search, re-logging in")
@@ -82,12 +152,9 @@ class CDGScraper:
                 await self._page.keyboard.press("Enter")
                 await self._page.wait_for_timeout(4000)
 
-            # Click equivalents button if present to expand all refs
             has_equiv = await self._expand_equivalents()
-
             results = await self._parse_results()
 
-            # Go back to catalog if we expanded equivalents (page changes)
             if has_equiv:
                 await self._go_to_catalog()
 
@@ -206,9 +273,95 @@ class CDGScraper:
             results[ref] = await self.search(ref)
         return results
 
+    async def search_designation(self, designation: str) -> list[CDGResult]:
+        """Search CDG by part name (designation field #A33).
+
+        Returns all results found — caller cross-references against known OE refs.
+        """
+        async with self._lock:
+            await self._ensure_session()
+
+            search_field = self._page.locator("#A33")
+            await search_field.click()
+            await search_field.fill("")
+            await self._page.keyboard.type(designation)
+            await self._page.keyboard.press("Enter")
+            await self._page.wait_for_timeout(4000)
+
+            title = await self._page.title()
+            if "Login" in title:
+                log.warning("CDG session expired during designation search, re-logging in")
+                await self._login()
+                search_field = self._page.locator("#A33")
+                await search_field.click()
+                await search_field.fill("")
+                await self._page.keyboard.type(designation)
+                await self._page.keyboard.press("Enter")
+                await self._page.wait_for_timeout(4000)
+
+            results = await self._parse_results()
+            log.info("CDG designation '%s': %d results", designation, len(results))
+            return results
+
+    async def search_designation_fallback(
+        self, part_name: str, oe_refs: list[str],
+    ) -> list[CDGResult]:
+        """Search CDG by part name, then filter results that match our OE refs.
+
+        Tries fuzzy variants of the part name. For each CDG result, checks if
+        the description contains any of our OE refs (normalized).
+        """
+        if not oe_refs:
+            return []
+
+        # Build normalized OE ref set for matching
+        oe_norm = {_normalize_ref(r) for r in oe_refs}
+
+        variants = _fuzzy_part_names(part_name)
+        log.info("CDG designation fallback for '%s', variants: %s, %d OE refs",
+                 part_name, variants, len(oe_refs))
+
+        for variant in variants:
+            all_results = await self.search_designation(variant)
+            if not all_results:
+                continue
+
+            # Check each result: does its description contain one of our OE refs?
+            matched = []
+            for r in all_results:
+                embedded = _extract_embedded_refs(r.description)
+                for emb in embedded:
+                    if _normalize_ref(emb) in oe_norm:
+                        log.info("CDG designation match: %s desc has OE '%s'",
+                                 r.reference, emb)
+                        matched.append(r)
+                        break
+
+            if matched:
+                return matched
+
+        return []
+
     async def close(self):
         """Close browser."""
         if self._browser:
             await self._browser.close()
         if self._playwright:
             await self._playwright.stop()
+
+
+def _extract_embedded_refs(description: str) -> list[str]:
+    """Extract reference codes embedded in CDG descriptions.
+
+    CDG descriptions like "SONDE LAMBDA A4 PASS 032906265" contain OE refs.
+    Match codes that are 6+ chars with at least some digits.
+    """
+    refs = []
+    for token in description.split():
+        clean = token.strip(".,;()")
+        if len(clean) < 5:
+            continue
+        has_digit = any(c.isdigit() for c in clean)
+        if has_digit and clean.replace("-", "").replace(".", "").isalnum():
+            refs.append(clean)
+    return refs

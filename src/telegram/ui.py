@@ -197,6 +197,28 @@ def render_variants_keyboard(
     return rows
 
 
+def generate_year_ranges(min_year: int, max_year: int) -> list[tuple[int, int]]:
+    """Generate sensible year range buttons from min/max years.
+
+    Returns ~4-5 ranges of 3-5 years each. If the span is small (<= 5 years),
+    returns a single range covering all years.
+    """
+    span = max_year - min_year + 1
+    if span <= 5:
+        return [(min_year, max_year)]
+    step = max(3, span // 4)
+    ranges = []
+    current = min_year
+    while current <= max_year:
+        end = min(current + step - 1, max_year)
+        # Absorb a tiny leftover (1-2 years) into the last range
+        if max_year - end <= 2:
+            end = max_year
+        ranges.append((current, end))
+        current = end + 1
+    return ranges
+
+
 def format_year_label(year_start: int | None, year_end: int | None) -> str:
     if year_start is None:
         return "?"

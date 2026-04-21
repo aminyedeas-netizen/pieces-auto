@@ -231,7 +231,8 @@ async def seed_vehicles():
                     await c.close()
                 break
             except (asyncpg.exceptions.ConnectionDoesNotExistError,
-                    asyncpg.exceptions.QueryCanceledError) as e:
+                    asyncpg.exceptions.QueryCanceledError,
+                    asyncpg.exceptions.UndefinedTableError) as e:
                 if attempt < 2:
                     print(f"  chunk {i} attempt {attempt+1} failed ({e}), retrying...")
                     await asyncio.sleep(2)

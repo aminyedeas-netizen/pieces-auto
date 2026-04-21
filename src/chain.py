@@ -95,6 +95,9 @@ async def search_part(vehicle_id: int | list[int], vehicle_name: str, part_name:
 
     vehicle_id can be a single int or a list of ints (grouped motorisations).
     """
+    from src.part_aliases import resolve_part_name
+    part_name = resolve_part_name(part_name)
+
     if isinstance(vehicle_id, list):
         from src.db.repository import lookup_references_multi
         refs = await lookup_references_multi(vehicle_id, part_name)
@@ -113,9 +116,10 @@ async def search_part(vehicle_id: int | list[int], vehicle_name: str, part_name:
             "Vous recevrez une notification des que disponible\\."
         )
 
-    # Cache short-circuit: drop refs already proven not on CDG
-    ref_codes = [r.reference for r in refs]
-    oe_codes = {r.reference for r in refs if r.is_oe}
+    # OE refs first — they use standardized codes CDG is more likely to recognize
+    refs_sorted = sorted(refs, key=lambda r: (not r.is_oe, r.source != "main_product"))
+    ref_codes = [r.reference for r in refs_sorted]
+    oe_codes = {r.reference for r in refs_sorted if r.is_oe}
     to_search, known_not_found = filter_searchable(ref_codes)
     if known_not_found:
         log.info(
@@ -164,6 +168,23 @@ async def search_part(vehicle_id: int | list[int], vehicle_name: str, part_name:
                 oe_hit = True
             else:
                 equiv_hit = True
+
+    if not available and not rupture:
+        # Fallback: search CDG by part name, cross-reference against our OE refs
+        oe_ref_list = [r.reference for r in refs if r.is_oe]
+        if oe_ref_list:
+            try:
+                desig_hits = await scraper.search_designation_fallback(part_name, oe_ref_list)
+                for hit in desig_hits:
+                    if hit.available:
+                        available.append(hit)
+                    else:
+                        rupture.append(hit)
+                if desig_hits:
+                    log.info("CDG designation fallback found %d results for %s / %s",
+                             len(desig_hits), vehicle_name, part_name)
+            except Exception as e:
+                log.error("CDG designation fallback error: %s", e)
 
     if not available and not rupture:
         await _notify_operator_cdg_unavailable(vehicle_name, part_name, ref_codes)
